@@ -237,12 +237,12 @@ def load_data():
 
     df['engagement'] = df['reactions'] + df['comments'] + df['shares']
 
-    # Time slots
+    # Time slots (adjusted for Philippine posting patterns)
     def get_time_slot(hour):
         if 6 <= hour < 12: return 'Morning (6AM-12PM)'
         elif 12 <= hour < 18: return 'Afternoon (12PM-6PM)'
-        elif 18 <= hour < 24: return 'Evening (6PM-12AM)'
-        else: return 'Night (12AM-6AM)'
+        elif 18 <= hour < 22: return 'Evening (6PM-10PM)'
+        else: return 'Night (10PM-6AM)'  # 22, 23, 0, 1, 2, 3, 4, 5
 
     df['time_slot'] = df['hour'].apply(get_time_slot)
 
@@ -306,7 +306,7 @@ def main():
     selected_type = st.sidebar.selectbox("Post Type", post_types)
 
     # Time slot filter
-    time_slots = ['All', 'Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)']
+    time_slots = ['All', 'Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-10PM)', 'Night (10PM-6AM)']
     selected_time = st.sidebar.selectbox("Time Slot", time_slots)
 
     # Apply filters
@@ -531,7 +531,7 @@ def main():
 
     with col2:
         st.markdown("### ⏰ Best Posting Times")
-        slot_order = ['Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)']
+        slot_order = ['Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-10PM)', 'Night (10PM-6AM)']
         slot_stats = filtered_df.groupby('time_slot').agg({
             'engagement': ['count', 'sum', 'mean'],
             'reach': 'mean',
