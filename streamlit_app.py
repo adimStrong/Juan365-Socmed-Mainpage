@@ -175,15 +175,23 @@ def main():
     post_types = ['All'] + sorted(df['post_type_clean'].unique().tolist())
     selected_type = st.sidebar.selectbox("Post Type", post_types)
 
+    # Time slot filter
+    time_slots = ['All', 'Morning (6AM-12PM)', 'Afternoon (12PM-6PM)', 'Evening (6PM-12AM)', 'Night (12AM-6AM)']
+    selected_time = st.sidebar.selectbox("Time Slot", time_slots)
+
     # Apply filters
     filtered_df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
     if selected_type != 'All':
         filtered_df = filtered_df[filtered_df['post_type_clean'] == selected_type]
+    if selected_time != 'All':
+        filtered_df = filtered_df[filtered_df['time_slot'] == selected_time]
 
     # Filter summary
     st.sidebar.markdown("---")
     st.sidebar.markdown(f"**Showing:** {len(filtered_df):,} posts")
     st.sidebar.markdown(f"**Period:** {start_date} to {end_date}")
+    if selected_time != 'All':
+        st.sidebar.markdown(f"**Time:** {selected_time}")
 
     # Main KPIs
     st.markdown("### 📈 Key Metrics")
