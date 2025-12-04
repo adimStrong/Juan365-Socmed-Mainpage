@@ -63,15 +63,19 @@ st.markdown("""
 def load_data():
     """Load and prepare data from CSV"""
     exports_dir = Path(__file__).parent / 'exports'
-    csv_files = list(exports_dir.glob('*.csv'))
 
-    if not csv_files:
-        st.error("No CSV files found in exports/ folder")
-        return None
-
-    # Get most recent CSV
-    csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    csv_path = csv_files[0]
+    # First, try to find the merged file
+    merged_file = exports_dir / 'Juan365_MERGED_ALL.csv'
+    if merged_file.exists():
+        csv_path = merged_file
+    else:
+        # Fall back to most recent CSV
+        csv_files = list(exports_dir.glob('*.csv'))
+        if not csv_files:
+            st.error("No CSV files found in exports/ folder")
+            return None
+        csv_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        csv_path = csv_files[0]
 
     df = pd.read_csv(csv_path)
 
