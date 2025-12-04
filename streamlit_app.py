@@ -42,6 +42,19 @@ st.markdown("""
         font-size: 1.8rem;
         font-weight: 700;
     }
+    /* Metric boxes styling for dark mode */
+    div[data-testid="metric-container"] {
+        background: #374151;
+        padding: 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid #4B5563;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #9CA3AF;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #F9FAFB;
+    }
     /* Dark mode card styling */
     .post-type-card {
         background: #374151;
