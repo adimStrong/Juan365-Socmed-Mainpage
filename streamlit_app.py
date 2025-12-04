@@ -215,29 +215,61 @@ def main():
     # Main KPIs
     st.markdown("### 📈 Key Metrics")
 
+    # Calculate metrics
+    total_posts = len(filtered_df)
+    total_reach = filtered_df['reach'].sum()
+    total_views = filtered_df['views'].sum()
+    total_engagement = filtered_df['engagement'].sum()
+    avg_reach = filtered_df['reach'].mean() if total_posts > 0 else 0
+    avg_views = filtered_df['views'].mean() if total_posts > 0 else 0
+    total_reactions = filtered_df['reactions'].sum()
+    total_comments = filtered_df['comments'].sum()
+
+    # KPI cards row 1
     col1, col2, col3, col4 = st.columns(4)
-
     with col1:
-        st.metric("Total Posts", f"{len(filtered_df):,}")
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">📊 Total Posts</p>
+            <h3>{total_posts:,}</h3>
+        </div>''', unsafe_allow_html=True)
     with col2:
-        st.metric("Total Reach", format_number(filtered_df['reach'].sum()))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">👥 Total Reach</p>
+            <h3>{format_number(total_reach)}</h3>
+        </div>''', unsafe_allow_html=True)
     with col3:
-        st.metric("Total Views", format_number(filtered_df['views'].sum()))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">👁️ Total Views</p>
+            <h3>{format_number(total_views)}</h3>
+        </div>''', unsafe_allow_html=True)
     with col4:
-        st.metric("Total Engagement", format_number(filtered_df['engagement'].sum()))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">💬 Total Engagement</p>
+            <h3>{format_number(total_engagement)}</h3>
+        </div>''', unsafe_allow_html=True)
 
+    # KPI cards row 2
     col5, col6, col7, col8 = st.columns(4)
-
     with col5:
-        avg_reach = filtered_df['reach'].mean() if len(filtered_df) > 0 else 0
-        st.metric("Avg Reach/Post", format_number(avg_reach))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">📈 Avg Reach/Post</p>
+            <h3>{format_number(avg_reach)}</h3>
+        </div>''', unsafe_allow_html=True)
     with col6:
-        avg_views = filtered_df['views'].mean() if len(filtered_df) > 0 else 0
-        st.metric("Avg Views/Post", format_number(avg_views))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">📊 Avg Views/Post</p>
+            <h3>{format_number(avg_views)}</h3>
+        </div>''', unsafe_allow_html=True)
     with col7:
-        st.metric("Total Reactions", format_number(filtered_df['reactions'].sum()))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">❤️ Total Reactions</p>
+            <h3>{format_number(total_reactions)}</h3>
+        </div>''', unsafe_allow_html=True)
     with col8:
-        st.metric("Total Comments", format_number(filtered_df['comments'].sum()))
+        st.markdown(f'''<div class="post-type-card">
+            <p class="subtitle">💭 Total Comments</p>
+            <h3>{format_number(total_comments)}</h3>
+        </div>''', unsafe_allow_html=True)
 
     st.markdown("---")
 
