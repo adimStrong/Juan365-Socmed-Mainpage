@@ -29,50 +29,29 @@ def get_logo_base64():
 
 logo_base64 = get_logo_base64()
 
-# Custom CSS - Auto dark/light mode detection
+# Custom CSS - Auto dark/light mode detection using Streamlit's native theme
 st.markdown("""
 <style>
-    /* ===== LIGHT MODE (default) ===== */
-    :root {
-        --bg-primary: #FFFFFF;
-        --bg-card: #F3F4F6;
-        --text-primary: #1F2937;
-        --text-secondary: #4B5563;
-        --text-muted: #6B7280;
-        --border-color: #E5E7EB;
-        --shadow: rgba(0,0,0,0.1);
-        --highlight-color: #D1FAE5;
+    /* ===== LIGHT MODE STYLES ===== */
+    /* Card styling for light mode */
+    .post-type-card {
+        background: #F3F4F6;
+        padding: 1rem;
+        border-radius: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        border: 1px solid #E5E7EB;
     }
-
-    /* ===== DARK MODE ===== */
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg-primary: #0E1117;
-            --bg-card: #374151;
-            --text-primary: #F9FAFB;
-            --text-secondary: #E5E7EB;
-            --text-muted: #9CA3AF;
-            --border-color: #4B5563;
-            --shadow: rgba(0,0,0,0.3);
-            --highlight-color: #065F46;
-        }
+    .post-type-card h3 {
+        margin: 0;
+        color: #1F2937;
     }
-
-    /* Streamlit dark theme detection */
-    [data-testid="stAppViewContainer"][data-theme="dark"] {
-        --bg-primary: #0E1117;
-        --bg-card: #374151;
-        --text-primary: #F9FAFB;
-        --text-secondary: #E5E7EB;
-        --text-muted: #9CA3AF;
-        --border-color: #4B5563;
-        --shadow: rgba(0,0,0,0.3);
-        --highlight-color: #065F46;
+    .post-type-card p {
+        margin: 0.25rem 0;
+        color: #4B5563;
     }
-
-    /* Main app background */
-    .stApp {
-        background-color: var(--bg-primary);
+    .post-type-card .subtitle {
+        color: #6B7280;
     }
 
     /* Header with logo */
@@ -108,69 +87,86 @@ st.markdown("""
         font-size: 0.9rem;
     }
 
-    /* Card styling - auto mode */
-    .post-type-card {
-        background: var(--bg-card);
-        padding: 1rem;
-        border-radius: 1rem;
-        box-shadow: 0 2px 8px var(--shadow);
-        margin-bottom: 1rem;
-        border: 1px solid var(--border-color);
-        transition: background 0.3s ease, border-color 0.3s ease;
-    }
-    .post-type-card h3 {
-        margin: 0;
-        color: var(--text-primary);
-    }
-    .post-type-card p {
-        margin: 0.25rem 0;
-        color: var(--text-secondary);
-    }
-    .post-type-card .subtitle {
-        color: var(--text-muted);
-    }
-
-    /* Metric styling */
-    div[data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-    div[data-testid="metric-container"] {
-        background: var(--bg-card);
-        padding: 1rem;
-        border-radius: 0.75rem;
-        border: 1px solid var(--border-color);
-    }
-    div[data-testid="stMetricLabel"] {
-        color: var(--text-muted);
-    }
-
-    /* Section headers */
-    .stMarkdown h3 {
-        color: var(--text-primary);
-    }
-
-    /* Table highlight for dark mode compatibility */
-    .dataframe tbody tr:hover {
-        background: var(--bg-card) !important;
-    }
-
-    /* Sidebar styling */
-    [data-testid="stSidebar"] {
-        background-color: var(--bg-card);
-    }
-    [data-testid="stSidebar"] .stMarkdown {
-        color: var(--text-primary);
-    }
-
-    /* Footer text */
+    /* Footer text - light mode */
     .footer-text {
         text-align: center;
-        color: var(--text-muted);
+        color: #6B7280;
         padding: 1rem;
     }
+
+    /* ===== DARK MODE OVERRIDES ===== */
+    /* Detect Streamlit dark theme */
+    [data-testid="stAppViewContainer"][class*="st-emotion-cache"] {
+        /* This targets all Streamlit containers */
+    }
+
+    /* Dark mode: when body/html has dark background */
+    @media (prefers-color-scheme: dark) {
+        .post-type-card {
+            background: #262730 !important;
+            border-color: #4B5563 !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+        .post-type-card h3 {
+            color: #F9FAFB !important;
+        }
+        .post-type-card p {
+            color: #E5E7EB !important;
+        }
+        .post-type-card .subtitle {
+            color: #9CA3AF !important;
+        }
+        .footer-text {
+            color: #9CA3AF !important;
+        }
+    }
+
+    /* Streamlit's internal dark theme detection */
+    .stApp[data-theme="dark"] .post-type-card,
+    [data-theme="dark"] .post-type-card {
+        background: #262730 !important;
+        border-color: #4B5563 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    }
+    .stApp[data-theme="dark"] .post-type-card h3,
+    [data-theme="dark"] .post-type-card h3 {
+        color: #F9FAFB !important;
+    }
+    .stApp[data-theme="dark"] .post-type-card p,
+    [data-theme="dark"] .post-type-card p {
+        color: #E5E7EB !important;
+    }
+    .stApp[data-theme="dark"] .post-type-card .subtitle,
+    [data-theme="dark"] .post-type-card .subtitle {
+        color: #9CA3AF !important;
+    }
+    .stApp[data-theme="dark"] .footer-text,
+    [data-theme="dark"] .footer-text {
+        color: #9CA3AF !important;
+    }
+
+    /* Alternative: detect dark background color directly */
+    .stApp:has([data-testid="stHeader"]) {
+        /* Light mode default */
+    }
 </style>
+""", unsafe_allow_html=True)
+
+# Additional JavaScript-based theme detection for more reliable switching
+st.markdown("""
+<script>
+    // Detect theme and add class to body for CSS targeting
+    function detectTheme() {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches ||
+                       document.body.style.backgroundColor === 'rgb(14, 17, 23)' ||
+                       getComputedStyle(document.body).backgroundColor === 'rgb(14, 17, 23)';
+        document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
+    detectTheme();
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', detectTheme);
+    // Re-check after Streamlit renders
+    setTimeout(detectTheme, 500);
+</script>
 """, unsafe_allow_html=True)
 
 # Function to get highlight color based on theme (using a moderate color that works in both)
