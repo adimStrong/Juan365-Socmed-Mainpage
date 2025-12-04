@@ -1,0 +1,34 @@
+{
+  "collection_date": "2025-12-04T14:19:27.746200",
+  "data_source": "Meta Business Suite Export",
+  "page_name": "Juan365",
+  "date_range": {
+    "start": "11/13/2025 16:00",
+    "end": "9/9/2025 7:00"
+  },
+  "total_posts": 493,
+  "post_type_counts": {
+    "Photos": 346,
+    "Videos": 95,
+    "Reels": 33,
+    "Live": 17,
+    "Text": 2
+  },
+  "engagement_totals": {
+    "reactions": 342712,
+    "comments": 149088,
+    "shares": 50156,
+    "total": 541956
+  },
+  "engagement_averages": {
+    "reactions": 695.2,
+    "comments": 302.4,
+    "shares": 101.7,
+    "total": 1099.3
+  },
+  "reach_totals": {
+    "total_reach": 15803800,
+    "total_views": 28556168,
+    "avg_reach_per_post": 32056.4
+  }
+}

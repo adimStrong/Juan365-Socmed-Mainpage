@@ -1,0 +1,15 @@
+# Token files (sensitive)
+**/long_lived_token.txt
+**/*token*.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
