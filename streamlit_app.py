@@ -44,23 +44,23 @@ st.markdown("""
     }
     /* Dark mode card styling */
     .post-type-card {
-        background: var(--background-secondary, #262730);
+        background: #374151;
         padding: 1rem;
         border-radius: 1rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         margin-bottom: 1rem;
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid #4B5563;
     }
     .post-type-card h3 {
         margin: 0;
-        color: var(--text-color, #FAFAFA);
+        color: #F9FAFB;
     }
     .post-type-card p {
         margin: 0.25rem 0;
-        color: var(--text-color, #FAFAFA);
+        color: #E5E7EB;
     }
     .post-type-card .subtitle {
-        color: #888;
+        color: #9CA3AF;
     }
 </style>
 """, unsafe_allow_html=True)
