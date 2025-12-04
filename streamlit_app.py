@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from pathlib import Path
+import base64
 
 # Page config
 st.set_page_config(
@@ -18,65 +19,165 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Dark mode compatible
+# Load logo as base64 for embedding
+def get_logo_base64():
+    logo_path = Path(__file__).parent / 'assets' / 'juan365_logo.jpg'
+    if logo_path.exists():
+        with open(logo_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode()
+    return None
+
+logo_base64 = get_logo_base64()
+
+# Custom CSS - Auto dark/light mode detection
 st.markdown("""
 <style>
+    /* ===== LIGHT MODE (default) ===== */
+    :root {
+        --bg-primary: #FFFFFF;
+        --bg-card: #F3F4F6;
+        --text-primary: #1F2937;
+        --text-secondary: #4B5563;
+        --text-muted: #6B7280;
+        --border-color: #E5E7EB;
+        --shadow: rgba(0,0,0,0.1);
+        --highlight-color: #D1FAE5;
+    }
+
+    /* ===== DARK MODE ===== */
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg-primary: #0E1117;
+            --bg-card: #374151;
+            --text-primary: #F9FAFB;
+            --text-secondary: #E5E7EB;
+            --text-muted: #9CA3AF;
+            --border-color: #4B5563;
+            --shadow: rgba(0,0,0,0.3);
+            --highlight-color: #065F46;
+        }
+    }
+
+    /* Streamlit dark theme detection */
+    [data-testid="stAppViewContainer"][data-theme="dark"] {
+        --bg-primary: #0E1117;
+        --bg-card: #374151;
+        --text-primary: #F9FAFB;
+        --text-secondary: #E5E7EB;
+        --text-muted: #9CA3AF;
+        --border-color: #4B5563;
+        --shadow: rgba(0,0,0,0.3);
+        --highlight-color: #065F46;
+    }
+
+    /* Main app background */
+    .stApp {
+        background-color: var(--bg-primary);
+    }
+
+    /* Header with logo */
     .main-header {
         background: linear-gradient(135deg, #4361EE 0%, #8B5CF6 100%);
-        padding: 2rem;
+        padding: 1.5rem 2rem;
         border-radius: 1rem;
         color: white;
-        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
         margin-bottom: 2rem;
+    }
+    .main-header .logo {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid rgba(255,255,255,0.3);
+    }
+    .main-header .header-text {
+        text-align: left;
     }
     .main-header h1 {
         margin: 0;
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 800;
     }
     .main-header p {
-        margin: 0.5rem 0 0 0;
+        margin: 0.25rem 0 0 0;
         opacity: 0.9;
+        font-size: 0.9rem;
     }
-    div[data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-    /* Metric boxes styling for dark mode */
-    div[data-testid="metric-container"] {
-        background: #374151;
-        padding: 1rem;
-        border-radius: 0.75rem;
-        border: 1px solid #4B5563;
-    }
-    div[data-testid="stMetricLabel"] {
-        color: #9CA3AF;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #F9FAFB;
-    }
-    /* Dark mode card styling */
+
+    /* Card styling - auto mode */
     .post-type-card {
-        background: #374151;
+        background: var(--bg-card);
         padding: 1rem;
         border-radius: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 2px 8px var(--shadow);
         margin-bottom: 1rem;
-        border: 1px solid #4B5563;
+        border: 1px solid var(--border-color);
+        transition: background 0.3s ease, border-color 0.3s ease;
     }
     .post-type-card h3 {
         margin: 0;
-        color: #F9FAFB;
+        color: var(--text-primary);
     }
     .post-type-card p {
         margin: 0.25rem 0;
-        color: #E5E7EB;
+        color: var(--text-secondary);
     }
     .post-type-card .subtitle {
-        color: #9CA3AF;
+        color: var(--text-muted);
+    }
+
+    /* Metric styling */
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    div[data-testid="metric-container"] {
+        background: var(--bg-card);
+        padding: 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid var(--border-color);
+    }
+    div[data-testid="stMetricLabel"] {
+        color: var(--text-muted);
+    }
+
+    /* Section headers */
+    .stMarkdown h3 {
+        color: var(--text-primary);
+    }
+
+    /* Table highlight for dark mode compatibility */
+    .dataframe tbody tr:hover {
+        background: var(--bg-card) !important;
+    }
+
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: var(--bg-card);
+    }
+    [data-testid="stSidebar"] .stMarkdown {
+        color: var(--text-primary);
+    }
+
+    /* Footer text */
+    .footer-text {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Function to get highlight color based on theme (using a moderate color that works in both)
+def get_highlight_color():
+    """Return a highlight color that works well in both light and dark modes"""
+    # Use a teal color that's visible in both modes
+    return '#0D9488'  # Teal-600 - works well on both light and dark
 
 
 @st.cache_data(ttl=60)  # Cache for 60 seconds only
@@ -163,13 +264,26 @@ def main():
     if df is None:
         return
 
-    # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>📊 Juan365 Dashboard</h1>
-        <p>Social Media Performance Analytics</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Header with logo
+    if logo_base64:
+        st.markdown(f"""
+        <div class="main-header">
+            <img src="data:image/jpeg;base64,{logo_base64}" class="logo" alt="Juan365 Logo">
+            <div class="header-text">
+                <h1>Juan365 Dashboard</h1>
+                <p>Social Media Performance Analytics</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="main-header">
+            <div class="header-text">
+                <h1>📊 Juan365 Dashboard</h1>
+                <p>Social Media Performance Analytics</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Sidebar filters
     st.sidebar.markdown("## 🎛️ Filters")
@@ -406,7 +520,7 @@ def main():
         best_day = day_stats.loc[day_stats['Avg Engagement'].idxmax(), 'day_of_week']
 
         st.dataframe(
-            day_stats.style.highlight_max(subset=['Avg Engagement'], color='#065F46').format({
+            day_stats.style.highlight_max(subset=['Avg Engagement'], color=get_highlight_color()).format({
                 'Posts': '{:,}',
                 'Total Engagement': '{:,}',
                 'Avg Engagement': '{:,}',
@@ -438,7 +552,7 @@ def main():
         best_slot = slot_stats.loc[slot_stats['Avg Engagement'].idxmax(), 'time_slot']
 
         st.dataframe(
-            slot_stats.style.highlight_max(subset=['Avg Engagement'], color='#065F46').format({
+            slot_stats.style.highlight_max(subset=['Avg Engagement'], color=get_highlight_color()).format({
                 'Posts': '{:,}',
                 'Total Engagement': '{:,}',
                 'Avg Engagement': '{:,}',
@@ -538,7 +652,7 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        f"<p style='text-align: center; color: #888;'>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} • Data from Meta Business Suite Export</p>",
+        f"<p class='footer-text'>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} • Data from Meta Business Suite Export</p>",
         unsafe_allow_html=True
     )
 
