@@ -94,8 +94,9 @@ def load_data():
     }
     df = df.rename(columns=column_mapping)
 
-    # Parse datetime
+    # Parse datetime and convert to Philippine Time (UTC+8)
     df['publish_datetime'] = pd.to_datetime(df['publish_time'], format='%m/%d/%Y %H:%M', errors='coerce')
+    df['publish_datetime'] = df['publish_datetime'] + pd.Timedelta(hours=8)  # Convert UTC to PH Time
     df['date'] = df['publish_datetime'].dt.date
     df['hour'] = df['publish_datetime'].dt.hour
     df['day_of_week'] = df['publish_datetime'].dt.day_name()
