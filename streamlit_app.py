@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS - Dark mode compatible
 st.markdown("""
 <style>
     .main-header {
@@ -38,22 +38,29 @@ st.markdown("""
         margin: 0.5rem 0 0 0;
         opacity: 0.9;
     }
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    .stMetric {
-        background: white;
-        padding: 1rem;
-        border-radius: 0.75rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem;
         font-weight: 700;
+    }
+    /* Dark mode card styling */
+    .post-type-card {
+        background: var(--background-secondary, #262730);
+        padding: 1rem;
+        border-radius: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        margin-bottom: 1rem;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .post-type-card h3 {
+        margin: 0;
+        color: var(--text-color, #FAFAFA);
+    }
+    .post-type-card p {
+        margin: 0.25rem 0;
+        color: var(--text-color, #FAFAFA);
+    }
+    .post-type-card .subtitle {
+        color: #888;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -423,12 +430,12 @@ def main():
         with cols[i % len(cols)]:
             icon = {'Photo': '📷', 'Video': '🎬', 'Reel': '🎞️', 'Live': '🔴', 'Text': '📝'}.get(row['post_type_clean'], '📄')
             st.markdown(f"""
-            <div style="background: white; padding: 1rem; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 1rem;">
-                <h3 style="margin: 0;">{icon} {row['post_type_clean']}</h3>
-                <p style="color: #666; margin: 0.5rem 0;">{int(row['Posts'])} posts</p>
-                <p style="margin: 0.25rem 0;"><strong>Reach:</strong> {format_number(row['Total Reach'])}</p>
-                <p style="margin: 0.25rem 0;"><strong>Views:</strong> {format_number(row['Total Views'])}</p>
-                <p style="margin: 0.25rem 0;"><strong>Engagement:</strong> {format_number(row['Total Engagement'])}</p>
+            <div class="post-type-card">
+                <h3>{icon} {row['post_type_clean']}</h3>
+                <p class="subtitle">{int(row['Posts'])} posts</p>
+                <p><strong>Reach:</strong> {format_number(row['Total Reach'])}</p>
+                <p><strong>Views:</strong> {format_number(row['Total Views'])}</p>
+                <p><strong>Engagement:</strong> {format_number(row['Total Engagement'])}</p>
             </div>
             """, unsafe_allow_html=True)
 
