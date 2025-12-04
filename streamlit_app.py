@@ -59,7 +59,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-@st.cache_data
+@st.cache_data(ttl=60)  # Cache for 60 seconds only
 def load_data():
     """Load and prepare data from CSV"""
     exports_dir = Path(__file__).parent / 'exports'
@@ -128,12 +128,8 @@ def load_data():
 
 
 def format_number(num):
-    """Format large numbers with K/M suffixes"""
-    if num >= 1_000_000:
-        return f"{num/1_000_000:.1f}M"
-    elif num >= 1_000:
-        return f"{num/1_000:.1f}K"
-    return f"{num:,.0f}"
+    """Format numbers with commas, no decimals"""
+    return f"{int(num):,}"
 
 
 def main():
@@ -333,16 +329,26 @@ def main():
             'engagement': ['count', 'sum', 'mean'],
             'reach': 'mean',
             'views': 'mean'
-        }).round(0)
+        })
         day_stats.columns = ['Posts', 'Total Engagement', 'Avg Engagement', 'Avg Reach', 'Avg Views']
         day_stats = day_stats.reindex(day_order)
         day_stats = day_stats.reset_index()
+
+        # Convert to int for clean display
+        for col in ['Posts', 'Total Engagement', 'Avg Engagement', 'Avg Reach', 'Avg Views']:
+            day_stats[col] = day_stats[col].fillna(0).astype(int)
 
         # Highlight best day
         best_day = day_stats.loc[day_stats['Avg Engagement'].idxmax(), 'day_of_week']
 
         st.dataframe(
-            day_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5'),
+            day_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5').format({
+                'Posts': '{:,}',
+                'Total Engagement': '{:,}',
+                'Avg Engagement': '{:,}',
+                'Avg Reach': '{:,}',
+                'Avg Views': '{:,}'
+            }),
             use_container_width=True,
             hide_index=True
         )
@@ -355,16 +361,26 @@ def main():
             'engagement': ['count', 'sum', 'mean'],
             'reach': 'mean',
             'views': 'mean'
-        }).round(0)
+        })
         slot_stats.columns = ['Posts', 'Total Engagement', 'Avg Engagement', 'Avg Reach', 'Avg Views']
         slot_stats = slot_stats.reindex(slot_order)
         slot_stats = slot_stats.reset_index()
+
+        # Convert to int for clean display
+        for col in ['Posts', 'Total Engagement', 'Avg Engagement', 'Avg Reach', 'Avg Views']:
+            slot_stats[col] = slot_stats[col].fillna(0).astype(int)
 
         # Highlight best slot
         best_slot = slot_stats.loc[slot_stats['Avg Engagement'].idxmax(), 'time_slot']
 
         st.dataframe(
-            slot_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5'),
+            slot_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5').format({
+                'Posts': '{:,}',
+                'Total Engagement': '{:,}',
+                'Avg Engagement': '{:,}',
+                'Avg Reach': '{:,}',
+                'Avg Views': '{:,}'
+            }),
             use_container_width=True,
             hide_index=True
         )
@@ -415,10 +431,18 @@ def main():
     top_posts['message'] = top_posts['message'].fillna('').str[:80]
     top_posts.columns = ['Date', 'Type', 'Message', 'Reach', 'Views', 'Reactions', 'Comments', 'Shares', 'Engagement', 'Link']
 
-    # Make links clickable
-    top_posts['Link'] = top_posts['Link'].apply(lambda x: f'<a href="{x}" target="_blank">View →</a>' if pd.notna(x) else '')
+    # Format numbers with commas
+    for col in ['Reach', 'Views', 'Reactions', 'Comments', 'Shares', 'Engagement']:
+        top_posts[col] = top_posts[col].apply(lambda x: f"{int(x):,}")
 
-    st.write(top_posts.to_html(escape=False, index=False), unsafe_allow_html=True)
+    st.dataframe(
+        top_posts,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Link": st.column_config.LinkColumn("Link", display_text="View →"),
+        }
+    )
 
     st.markdown("---")
 
@@ -431,6 +455,10 @@ def main():
     all_posts['message'] = all_posts['message'].fillna('').str[:60]
     all_posts.columns = ['Date', 'Type', 'Message', 'Reach', 'Views', 'Reactions', 'Comments', 'Shares', 'Engagement', 'Link']
 
+    # Format numbers with commas
+    for col in ['Reach', 'Views', 'Reactions', 'Comments', 'Shares', 'Engagement']:
+        all_posts[col] = all_posts[col].apply(lambda x: f"{int(x):,}")
+
     # Add clickable links column
     all_posts['Link'] = all_posts['Link'].apply(lambda x: x if pd.notna(x) else '')
 
@@ -440,9 +468,6 @@ def main():
         height=600,
         column_config={
             "Link": st.column_config.LinkColumn("Link", display_text="View →"),
-            "Reach": st.column_config.NumberColumn("Reach", format="%d"),
-            "Views": st.column_config.NumberColumn("Views", format="%d"),
-            "Engagement": st.column_config.NumberColumn("Engagement", format="%d"),
         }
     )
 
