@@ -211,9 +211,8 @@ def load_data():
     }
     df = df.rename(columns=column_mapping)
 
-    # Parse datetime - Meta exports in Pacific Time (US), convert to Philippine Time (+16 hours)
+    # Parse datetime - use times as exported from Meta (assumed to be in local timezone)
     df['publish_datetime'] = pd.to_datetime(df['publish_time'], format='%m/%d/%Y %H:%M', errors='coerce')
-    df['publish_datetime'] = df['publish_datetime'] + pd.Timedelta(hours=16)  # PST to PHT conversion
     df['date'] = df['publish_datetime'].dt.date
     df['hour'] = df['publish_datetime'].dt.hour
     df['day_of_week'] = df['publish_datetime'].dt.day_name()
