@@ -406,7 +406,7 @@ def main():
         best_day = day_stats.loc[day_stats['Avg Engagement'].idxmax(), 'day_of_week']
 
         st.dataframe(
-            day_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5').format({
+            day_stats.style.highlight_max(subset=['Avg Engagement'], color='#065F46').format({
                 'Posts': '{:,}',
                 'Total Engagement': '{:,}',
                 'Avg Engagement': '{:,}',
@@ -438,7 +438,7 @@ def main():
         best_slot = slot_stats.loc[slot_stats['Avg Engagement'].idxmax(), 'time_slot']
 
         st.dataframe(
-            slot_stats.style.highlight_max(subset=['Avg Engagement'], color='#D1FAE5').format({
+            slot_stats.style.highlight_max(subset=['Avg Engagement'], color='#065F46').format({
                 'Posts': '{:,}',
                 'Total Engagement': '{:,}',
                 'Avg Engagement': '{:,}',
