@@ -436,7 +436,14 @@ def main():
     # ===== PAGE OVERVIEW SECTION (NEW!) =====
     st.markdown("### 🏠 Page Overview")
 
-    col1, col2, col3, col4 = st.columns(4)
+    # Calculate totals from API posts data
+    api_posts = posts_data.get('posts', [])
+    api_total_reactions = sum(p.get('reactions', 0) for p in api_posts)
+    api_total_comments = sum(p.get('comments', 0) for p in api_posts)
+    api_total_shares = sum(p.get('shares', 0) for p in api_posts)
+    api_post_count = len(api_posts)
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         followers = page_info.get('fan_count', 0)
@@ -460,12 +467,36 @@ def main():
             <p>🔥 Talking About (Weekly)</p>
         </div>''', unsafe_allow_html=True)
 
+    # Second row - API engagement stats
+    col4, col5, col6, col7 = st.columns(4)
+
     with col4:
         total_video_views = videos_data.get('total_views', 0)
         st.markdown(f'''<div class="page-overview-card">
             <h2>{format_number(total_video_views)}</h2>
             <p>🎬 Total Video Views</p>
         </div>''', unsafe_allow_html=True)
+
+    with col5:
+        st.markdown(f'''<div class="page-overview-card">
+            <h2>{format_number(api_total_reactions)}</h2>
+            <p>❤️ Total Reactions (API)</p>
+        </div>''', unsafe_allow_html=True)
+
+    with col6:
+        st.markdown(f'''<div class="page-overview-card">
+            <h2>{format_number(api_total_comments)}</h2>
+            <p>💬 Total Comments (API)</p>
+        </div>''', unsafe_allow_html=True)
+
+    with col7:
+        st.markdown(f'''<div class="page-overview-card">
+            <h2>{format_number(api_total_shares)}</h2>
+            <p>🔄 Total Shares (API)</p>
+        </div>''', unsafe_allow_html=True)
+
+    if api_post_count > 0:
+        st.caption(f"📊 API data from {api_post_count} recent posts")
 
     st.markdown("---")
 
