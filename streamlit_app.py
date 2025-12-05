@@ -433,37 +433,8 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # ===== PAGE OVERVIEW SECTION (NEW!) =====
+    # ===== PAGE OVERVIEW SECTION =====
     st.markdown("### 🏠 Page Overview")
-
-    # Get totals - prefer API totals (from all posts), then CSV, then calculate
-    api_total_reactions = posts_data.get('total_reactions', 0)
-    api_total_comments = posts_data.get('total_comments', 0)
-    api_total_shares = posts_data.get('total_shares', 0)
-    api_post_count = posts_data.get('total_posts', 0)
-
-    if api_total_reactions > 0:
-        # Use pre-calculated API totals (from ALL posts)
-        all_total_reactions = api_total_reactions
-        all_total_comments = api_total_comments
-        all_total_shares = api_total_shares
-        all_post_count = api_post_count
-        data_source = "API (all posts)"
-    elif df is not None and not df.empty:
-        # Fall back to CSV data
-        all_total_reactions = int(df['reactions'].sum()) if 'reactions' in df.columns else 0
-        all_total_comments = int(df['comments'].sum()) if 'comments' in df.columns else 0
-        all_total_shares = int(df['shares'].sum()) if 'shares' in df.columns else 0
-        all_post_count = len(df)
-        data_source = "CSV"
-    else:
-        # Calculate from API posts array
-        api_posts = posts_data.get('posts', [])
-        all_total_reactions = sum(p.get('reactions', 0) for p in api_posts)
-        all_total_comments = sum(p.get('comments', 0) for p in api_posts)
-        all_total_shares = sum(p.get('shares', 0) for p in api_posts)
-        all_post_count = len(api_posts)
-        data_source = "API"
 
     col1, col2, col3 = st.columns(3)
 
@@ -489,36 +460,12 @@ def main():
             <p>🔥 Talking About (Weekly)</p>
         </div>''', unsafe_allow_html=True)
 
-    # Second row - Total engagement stats from all posts
-    col4, col5, col6, col7 = st.columns(4)
-
-    with col4:
-        total_video_views = videos_data.get('total_views', 0)
-        st.markdown(f'''<div class="page-overview-card">
-            <h2>{format_number(total_video_views)}</h2>
-            <p>🎬 Total Video Views</p>
-        </div>''', unsafe_allow_html=True)
-
-    with col5:
-        st.markdown(f'''<div class="page-overview-card">
-            <h2>{format_number(all_total_reactions)}</h2>
-            <p>❤️ Total Reactions</p>
-        </div>''', unsafe_allow_html=True)
-
-    with col6:
-        st.markdown(f'''<div class="page-overview-card">
-            <h2>{format_number(all_total_comments)}</h2>
-            <p>💬 Total Comments</p>
-        </div>''', unsafe_allow_html=True)
-
-    with col7:
-        st.markdown(f'''<div class="page-overview-card">
-            <h2>{format_number(all_total_shares)}</h2>
-            <p>🔄 Total Shares</p>
-        </div>''', unsafe_allow_html=True)
-
-    if all_post_count > 0:
-        st.caption(f"📊 Engagement totals from {all_post_count:,} {data_source}")
+    # Second row - Video Views (API data)
+    total_video_views = videos_data.get('total_views', 0)
+    st.markdown(f'''<div class="page-overview-card">
+        <h2>{format_number(total_video_views)}</h2>
+        <p>🎬 Total Video Views</p>
+    </div>''', unsafe_allow_html=True)
 
     st.markdown("---")
 
