@@ -710,21 +710,45 @@ def main():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("### 📊 Engagement by Post Type")
-        type_stats = filtered_df.groupby('post_type_clean').agg({
-            'engagement': 'sum',
+        st.markdown("### 📊 Interaction by Post Type")
+        # Build aggregation dict based on available columns
+        agg_cols = {
             'reactions': 'sum',
             'comments': 'sum',
+            'shares': 'sum',
             'post_id': 'count'
-        }).rename(columns={'post_id': 'posts'}).reset_index()
+        }
+        # Add views and reach if available
+        if 'views' in filtered_df.columns:
+            agg_cols['views'] = 'sum'
+        if 'reach' in filtered_df.columns:
+            agg_cols['reach'] = 'sum'
+
+        type_stats = filtered_df.groupby('post_type_clean').agg(agg_cols).rename(columns={'post_id': 'posts'}).reset_index()
+
+        # Calculate interaction (reactions + comments + shares)
+        type_stats['interaction'] = type_stats['reactions'] + type_stats['comments'] + type_stats['shares']
+
+        # Build chart columns - Reactions, Comments, Shares, Interaction, Views, Reach
+        chart_cols = ['reactions', 'comments', 'shares', 'interaction']
+        chart_title = 'Reactions, Comments, Shares & Interaction'
+        colors = ['#4361EE', '#06D6A0', '#F59E0B', '#EC4899']
+
+        if 'views' in type_stats.columns:
+            chart_cols.append('views')
+            chart_title = 'Interactions, Views & Reach by Post Type'
+            colors.append('#10B981')
+        if 'reach' in type_stats.columns:
+            chart_cols.append('reach')
+            colors.append('#8B5CF6')
 
         fig = px.bar(
             type_stats,
             x='post_type_clean',
-            y=['reactions', 'comments', 'engagement'],
-            title='Reactions, Comments & Engagement by Post Type',
+            y=chart_cols,
+            title=chart_title,
             barmode='group',
-            color_discrete_sequence=['#4361EE', '#06D6A0', '#EC4899']
+            color_discrete_sequence=colors
         )
         fig.update_layout(xaxis_title='Post Type', yaxis_title='Count', height=400)
         st.plotly_chart(fig, use_container_width=True)
