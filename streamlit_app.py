@@ -588,33 +588,36 @@ def main():
 
     st.markdown("---")
 
-    # ===== REACTION BREAKDOWN (only if API data available) =====
-    # Check if we have reaction breakdown data (from API)
-    has_reaction_data = 'like' in filtered_df.columns and filtered_df['like'].sum() > 0
-    if has_reaction_data:
-        posts_with_reactions = filtered_df[filtered_df['like'] > 0]
+    # ===== REACTION BREAKDOWN (from API data) =====
+    # Get reaction data directly from API posts (more reliable than CSV merge)
+    api_posts = posts_data.get('posts', [])
 
-        # Get date range of posts with reaction data
-        if 'date' in posts_with_reactions.columns and len(posts_with_reactions) > 0:
-            reaction_dates = pd.to_datetime(posts_with_reactions['date'])
-            reaction_min_date = reaction_dates.min().strftime('%b %d, %Y')
-            reaction_max_date = reaction_dates.max().strftime('%b %d, %Y')
-            reaction_post_count = len(posts_with_reactions)
-            date_range_text = f"📅 Data from **{reaction_min_date}** to **{reaction_max_date}** ({reaction_post_count} posts with reaction data)"
+    # Calculate totals from API posts
+    total_like = sum(p.get('like', 0) for p in api_posts)
+    total_love = sum(p.get('love', 0) for p in api_posts)
+    total_haha = sum(p.get('haha', 0) for p in api_posts)
+    total_wow = sum(p.get('wow', 0) for p in api_posts)
+    total_sad = sum(p.get('sad', 0) for p in api_posts)
+    total_angry = sum(p.get('angry', 0) for p in api_posts)
+    total_all_reactions = total_like + total_love + total_haha + total_wow + total_sad + total_angry
+
+    if total_all_reactions > 0:
+        # Get date range from API posts
+        reaction_post_count = len([p for p in api_posts if p.get('like', 0) > 0 or p.get('love', 0) > 0])
+        if api_posts:
+            dates = [p.get('created_time', '')[:10] for p in api_posts if p.get('created_time')]
+            if dates:
+                reaction_min_date = pd.to_datetime(min(dates)).strftime('%b %d, %Y')
+                reaction_max_date = pd.to_datetime(max(dates)).strftime('%b %d, %Y')
+                date_range_text = f"📅 Data from **{reaction_min_date}** to **{reaction_max_date}** ({reaction_post_count} posts)"
+            else:
+                date_range_text = f"📊 From {reaction_post_count} posts"
         else:
             date_range_text = ""
 
         st.markdown("### 😊 Reaction Breakdown")
         if date_range_text:
             st.markdown(date_range_text)
-
-        total_like = posts_with_reactions['like'].sum()
-        total_love = posts_with_reactions['love'].sum()
-        total_haha = posts_with_reactions['haha'].sum()
-        total_wow = posts_with_reactions['wow'].sum()
-        total_sad = posts_with_reactions['sad'].sum()
-        total_angry = posts_with_reactions['angry'].sum()
-        total_all_reactions = total_like + total_love + total_haha + total_wow + total_sad + total_angry
 
         col1, col2 = st.columns(2)
 
