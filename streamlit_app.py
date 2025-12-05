@@ -436,7 +436,7 @@ def main():
     # ===== PAGE OVERVIEW SECTION =====
     st.markdown("### 🏠 Page Overview")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         followers = page_info.get('fan_count', 0)
@@ -460,12 +460,12 @@ def main():
             <p>🔥 Talking About (Weekly)</p>
         </div>''', unsafe_allow_html=True)
 
-    # Second row - Video Views (API data)
-    total_video_views = videos_data.get('total_views', 0)
-    st.markdown(f'''<div class="page-overview-card">
-        <h2>{format_number(total_video_views)}</h2>
-        <p>🎬 Total Video Views</p>
-    </div>''', unsafe_allow_html=True)
+    with col4:
+        total_video_views = videos_data.get('total_views', 0)
+        st.markdown(f'''<div class="page-overview-card">
+            <h2>{format_number(total_video_views)}</h2>
+            <p>🎬 Total Video Views</p>
+        </div>''', unsafe_allow_html=True)
 
     st.markdown("---")
 
