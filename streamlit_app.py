@@ -144,28 +144,37 @@ def fetch_page_info_api():
 
 
 @st.cache_data(ttl=3600)
-def fetch_posts_api(limit=50):
+def fetch_posts_api(limit=100):
     """Fetch recent posts with engagement and reaction breakdown from Facebook API"""
     page_id, page_token, base_url = get_credentials()
     if not page_id or not page_token:
-        return {'posts': [], 'total_posts': 0}
+        return {'posts': [], 'total_posts': 0, 'error': 'No credentials'}
 
     posts = []
+    error_msg = None
 
     # First fetch basic post data
     url = f"{base_url}/{page_id}/posts"
     params = {
         'fields': 'id,message,created_time,shares,permalink_url,status_type,'
-                  'reactions.summary(true),comments.summary(true)',
+                  'reactions.summary(true),comments.summary(true),'
+                  'reactions.type(LIKE).summary(true).as(like_count),'
+                  'reactions.type(LOVE).summary(true).as(love_count),'
+                  'reactions.type(HAHA).summary(true).as(haha_count),'
+                  'reactions.type(WOW).summary(true).as(wow_count),'
+                  'reactions.type(SAD).summary(true).as(sad_count),'
+                  'reactions.type(ANGRY).summary(true).as(angry_count)',
         'limit': limit,
         'access_token': page_token
     }
 
     try:
-        response = requests.get(url, params=params, timeout=30)
+        response = requests.get(url, params=params, timeout=60)
         data = response.json()
 
-        if 'error' not in data:
+        if 'error' in data:
+            error_msg = data['error'].get('message', 'Unknown API error')
+        else:
             for post in data.get('data', []):
                 processed = {
                     'id': post.get('id'),
@@ -176,44 +185,29 @@ def fetch_posts_api(limit=50):
                     'reactions': post.get('reactions', {}).get('summary', {}).get('total_count', 0),
                     'comments': post.get('comments', {}).get('summary', {}).get('total_count', 0),
                     'shares': post.get('shares', {}).get('count', 0) if post.get('shares') else 0,
-                    'like': 0, 'love': 0, 'haha': 0, 'wow': 0, 'sad': 0, 'angry': 0,
+                    # Get reaction breakdown directly from the same API call
+                    'like': post.get('like_count', {}).get('summary', {}).get('total_count', 0),
+                    'love': post.get('love_count', {}).get('summary', {}).get('total_count', 0),
+                    'haha': post.get('haha_count', {}).get('summary', {}).get('total_count', 0),
+                    'wow': post.get('wow_count', {}).get('summary', {}).get('total_count', 0),
+                    'sad': post.get('sad_count', {}).get('summary', {}).get('total_count', 0),
+                    'angry': post.get('angry_count', {}).get('summary', {}).get('total_count', 0),
                 }
                 processed['engagement'] = processed['reactions'] + processed['comments'] + processed['shares']
                 posts.append(processed)
 
-            # Fetch reaction breakdown per post (for first 50 posts)
-            for post in posts[:50]:
-                try:
-                    reaction_url = f"{base_url}/{post['id']}"
-                    reaction_params = {
-                        'fields': 'reactions.type(LIKE).summary(true).as(like),'
-                                  'reactions.type(LOVE).summary(true).as(love),'
-                                  'reactions.type(HAHA).summary(true).as(haha),'
-                                  'reactions.type(WOW).summary(true).as(wow),'
-                                  'reactions.type(SAD).summary(true).as(sad),'
-                                  'reactions.type(ANGRY).summary(true).as(angry)',
-                        'access_token': page_token
-                    }
-                    reaction_response = requests.get(reaction_url, params=reaction_params, timeout=10)
-                    reaction_data = reaction_response.json()
-
-                    if 'error' not in reaction_data:
-                        post['like'] = reaction_data.get('like', {}).get('summary', {}).get('total_count', 0)
-                        post['love'] = reaction_data.get('love', {}).get('summary', {}).get('total_count', 0)
-                        post['haha'] = reaction_data.get('haha', {}).get('summary', {}).get('total_count', 0)
-                        post['wow'] = reaction_data.get('wow', {}).get('summary', {}).get('total_count', 0)
-                        post['sad'] = reaction_data.get('sad', {}).get('summary', {}).get('total_count', 0)
-                        post['angry'] = reaction_data.get('angry', {}).get('summary', {}).get('total_count', 0)
-                except Exception:
-                    pass  # Skip this post's reaction breakdown
-
-    except Exception:
-        pass
+    except requests.exceptions.Timeout:
+        error_msg = 'API request timed out'
+    except requests.exceptions.RequestException as e:
+        error_msg = f'Request error: {str(e)}'
+    except Exception as e:
+        error_msg = f'Unexpected error: {str(e)}'
 
     return {
         'fetched_at': datetime.now().isoformat(),
         'total_posts': len(posts),
-        'posts': posts
+        'posts': posts,
+        'error': error_msg
     }
 
 
@@ -255,43 +249,51 @@ def load_api_data():
     """Load data from API JSON files or fetch from API directly"""
     data_dir = Path(__file__).parent / 'data'
 
-    # Load page info from file
+    # Check if data directory exists (won't exist on Streamlit Cloud)
+    is_cloud = not data_dir.exists()
+
+    # Load page info from file (if local)
     page_info = {}
-    page_info_file = data_dir / 'page_info.json'
-    if page_info_file.exists():
-        with open(page_info_file, 'r', encoding='utf-8') as f:
-            page_info = json.load(f)
+    if not is_cloud:
+        page_info_file = data_dir / 'page_info.json'
+        if page_info_file.exists():
+            with open(page_info_file, 'r', encoding='utf-8') as f:
+                page_info = json.load(f)
 
-    # Load posts from file
+    # Load posts from file (if local)
     posts_data = {'posts': [], 'total_posts': 0}
-    posts_file = data_dir / 'posts.json'
-    if posts_file.exists():
-        with open(posts_file, 'r', encoding='utf-8') as f:
-            posts_data = json.load(f)
+    if not is_cloud:
+        posts_file = data_dir / 'posts.json'
+        if posts_file.exists():
+            with open(posts_file, 'r', encoding='utf-8') as f:
+                posts_data = json.load(f)
 
-    # Load videos from file
+    # Load videos from file (if local)
     videos_data = {'videos': [], 'total_videos': 0, 'total_views': 0}
-    videos_file = data_dir / 'videos.json'
-    if videos_file.exists():
-        with open(videos_file, 'r', encoding='utf-8') as f:
-            videos_data = json.load(f)
+    if not is_cloud:
+        videos_file = data_dir / 'videos.json'
+        if videos_file.exists():
+            with open(videos_file, 'r', encoding='utf-8') as f:
+                videos_data = json.load(f)
 
-    # Fetch from API if no local files OR always fetch for reaction data
+    # Fetch from API - ALWAYS on cloud, or if no local data
     page_id, page_token, _ = get_credentials()
 
-    if not page_info and page_id and page_token:
-        page_info = fetch_page_info_api()
-
-    # Always fetch posts from API for reaction breakdown (even if we have local files)
     if page_id and page_token:
-        if not posts_data.get('posts'):
+        # Always fetch page info if empty
+        if not page_info:
+            page_info = fetch_page_info_api()
+
+        # On cloud: ALWAYS fetch posts from API
+        # Local: fetch if no posts or no reaction data
+        if is_cloud or not posts_data.get('posts'):
             posts_data = fetch_posts_api(limit=100)
         elif not any(p.get('like', 0) > 0 for p in posts_data.get('posts', [])):
-            # Local posts exist but no reaction data - fetch from API
             posts_data = fetch_posts_api(limit=100)
 
-    if not videos_data.get('videos') and page_id and page_token:
-        videos_data = fetch_videos_api(limit=100)
+        # Always fetch videos if empty
+        if not videos_data.get('videos'):
+            videos_data = fetch_videos_api(limit=100)
 
     return page_info, posts_data, videos_data
 
@@ -616,6 +618,10 @@ def main():
     # Get reaction data directly from API posts (more reliable than CSV merge)
     api_posts = posts_data.get('posts', [])
 
+    # Show API error if any
+    if posts_data.get('error'):
+        st.error(f"⚠️ API Error: {posts_data.get('error')}")
+
     # Calculate totals from API posts
     total_like = sum(p.get('like', 0) for p in api_posts)
     total_love = sum(p.get('love', 0) for p in api_posts)
@@ -624,6 +630,12 @@ def main():
     total_sad = sum(p.get('sad', 0) for p in api_posts)
     total_angry = sum(p.get('angry', 0) for p in api_posts)
     total_all_reactions = total_like + total_love + total_haha + total_wow + total_sad + total_angry
+
+    # Debug: Show API fetch status
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**API Status:**")
+    st.sidebar.markdown(f"Posts from API: {len(api_posts)}")
+    st.sidebar.markdown(f"Total reactions: {total_all_reactions:,}")
 
     if total_all_reactions > 0:
         # Get date range from API posts
