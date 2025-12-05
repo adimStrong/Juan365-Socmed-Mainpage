@@ -7,7 +7,19 @@ import requests
 import json
 from pathlib import Path
 from datetime import datetime
-from config import PAGE_ID, PAGE_TOKEN, BASE_URL
+
+# Try to load config - supports both local config.py and Streamlit secrets
+try:
+    from config import PAGE_ID, PAGE_TOKEN, BASE_URL
+except ImportError:
+    # Running on Streamlit Cloud - use secrets
+    try:
+        import streamlit as st
+        PAGE_ID = st.secrets["PAGE_ID"]
+        PAGE_TOKEN = st.secrets["PAGE_TOKEN"]
+        BASE_URL = st.secrets.get("BASE_URL", "https://graph.facebook.com/v21.0")
+    except Exception:
+        raise ImportError("No config.py found and Streamlit secrets not available. Please create config.py from config.template.py")
 
 # Data directory
 DATA_DIR = Path(__file__).parent / 'data'

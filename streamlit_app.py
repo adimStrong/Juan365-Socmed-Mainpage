@@ -11,6 +11,23 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import base64
 import json
+import requests
+
+# Try to load config - supports both local config.py and Streamlit secrets
+PAGE_ID = None
+PAGE_TOKEN = None
+BASE_URL = "https://graph.facebook.com/v21.0"
+
+try:
+    from config import PAGE_ID, PAGE_TOKEN, BASE_URL
+except ImportError:
+    # Running on Streamlit Cloud - use secrets
+    try:
+        PAGE_ID = st.secrets.get("PAGE_ID")
+        PAGE_TOKEN = st.secrets.get("PAGE_TOKEN")
+        BASE_URL = st.secrets.get("BASE_URL", "https://graph.facebook.com/v21.0")
+    except Exception:
+        pass  # Will use cached data only
 
 # Page config
 st.set_page_config(
@@ -97,31 +114,151 @@ def get_highlight_color():
     return '#0D9488'
 
 
+# ===== API FETCH FUNCTIONS (for Streamlit Cloud) =====
+@st.cache_data(ttl=300)
+def fetch_page_info_api():
+    """Fetch page-level metrics from Facebook API"""
+    if not PAGE_ID or not PAGE_TOKEN:
+        return {}
+
+    url = f"{BASE_URL}/{PAGE_ID}"
+    params = {
+        'fields': 'name,fan_count,followers_count,talking_about_count,overall_star_rating,rating_count',
+        'access_token': PAGE_TOKEN
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
+        if 'error' not in data:
+            data['fetched_at'] = datetime.now().isoformat()
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+@st.cache_data(ttl=300)
+def fetch_posts_api(limit=100):
+    """Fetch recent posts with engagement from Facebook API"""
+    if not PAGE_ID or not PAGE_TOKEN:
+        return {'posts': [], 'total_posts': 0}
+
+    posts = []
+    url = f"{BASE_URL}/{PAGE_ID}/posts"
+    params = {
+        'fields': 'id,message,created_time,shares,permalink_url,status_type,'
+                  'reactions.type(LIKE).summary(true).as(like),'
+                  'reactions.type(LOVE).summary(true).as(love),'
+                  'reactions.type(HAHA).summary(true).as(haha),'
+                  'reactions.type(WOW).summary(true).as(wow),'
+                  'reactions.type(SAD).summary(true).as(sad),'
+                  'reactions.type(ANGRY).summary(true).as(angry),'
+                  'reactions.summary(true),comments.summary(true)',
+        'limit': limit,
+        'access_token': PAGE_TOKEN
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        data = response.json()
+
+        if 'error' not in data:
+            for post in data.get('data', []):
+                processed = {
+                    'id': post.get('id'),
+                    'message': post.get('message', '')[:200] if post.get('message') else '',
+                    'created_time': post.get('created_time'),
+                    'permalink_url': post.get('permalink_url'),
+                    'post_type': post.get('status_type', 'unknown'),
+                    'reactions': post.get('reactions', {}).get('summary', {}).get('total_count', 0),
+                    'comments': post.get('comments', {}).get('summary', {}).get('total_count', 0),
+                    'shares': post.get('shares', {}).get('count', 0) if post.get('shares') else 0,
+                    'like': post.get('like', {}).get('summary', {}).get('total_count', 0),
+                    'love': post.get('love', {}).get('summary', {}).get('total_count', 0),
+                    'haha': post.get('haha', {}).get('summary', {}).get('total_count', 0),
+                    'wow': post.get('wow', {}).get('summary', {}).get('total_count', 0),
+                    'sad': post.get('sad', {}).get('summary', {}).get('total_count', 0),
+                    'angry': post.get('angry', {}).get('summary', {}).get('total_count', 0),
+                }
+                processed['engagement'] = processed['reactions'] + processed['comments'] + processed['shares']
+                posts.append(processed)
+    except Exception:
+        pass
+
+    return {
+        'fetched_at': datetime.now().isoformat(),
+        'total_posts': len(posts),
+        'posts': posts
+    }
+
+
+@st.cache_data(ttl=300)
+def fetch_videos_api(limit=100):
+    """Fetch videos with view counts from Facebook API"""
+    if not PAGE_ID or not PAGE_TOKEN:
+        return {'videos': [], 'total_videos': 0, 'total_views': 0}
+
+    videos = []
+    url = f"{BASE_URL}/{PAGE_ID}/videos"
+    params = {
+        'fields': 'id,title,description,created_time,length,views,permalink_url',
+        'limit': limit,
+        'access_token': PAGE_TOKEN
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        data = response.json()
+
+        if 'error' not in data:
+            videos = data.get('data', [])
+    except Exception:
+        pass
+
+    total_views = sum(v.get('views', 0) for v in videos)
+    return {
+        'fetched_at': datetime.now().isoformat(),
+        'total_videos': len(videos),
+        'total_views': total_views,
+        'videos': videos
+    }
+
+
 @st.cache_data(ttl=60)
 def load_api_data():
-    """Load data from API JSON files"""
+    """Load data from API JSON files or fetch from API directly"""
     data_dir = Path(__file__).parent / 'data'
 
-    # Load page info
+    # Load page info from file
     page_info = {}
     page_info_file = data_dir / 'page_info.json'
     if page_info_file.exists():
         with open(page_info_file, 'r', encoding='utf-8') as f:
             page_info = json.load(f)
 
-    # Load posts
+    # Load posts from file
     posts_data = {'posts': [], 'total_posts': 0}
     posts_file = data_dir / 'posts.json'
     if posts_file.exists():
         with open(posts_file, 'r', encoding='utf-8') as f:
             posts_data = json.load(f)
 
-    # Load videos
+    # Load videos from file
     videos_data = {'videos': [], 'total_videos': 0, 'total_views': 0}
     videos_file = data_dir / 'videos.json'
     if videos_file.exists():
         with open(videos_file, 'r', encoding='utf-8') as f:
             videos_data = json.load(f)
+
+    # If no local files, try fetching from API (Streamlit Cloud mode)
+    if not page_info and PAGE_ID and PAGE_TOKEN:
+        page_info = fetch_page_info_api()
+
+    if not posts_data.get('posts') and PAGE_ID and PAGE_TOKEN:
+        posts_data = fetch_posts_api(limit=100)
+
+    if not videos_data.get('videos') and PAGE_ID and PAGE_TOKEN:
+        videos_data = fetch_videos_api(limit=100)
 
     return page_info, posts_data, videos_data
 
