@@ -274,9 +274,16 @@ def load_api_data():
                 page_info = json.load(f)
             break
 
-    # Load posts with reactions (recent 30 for reaction breakdown)
+    # Load posts with reactions (historical data from June 2025 for reaction breakdown)
     posts_data = {'posts': [], 'total_posts': 0}
     for cache_dir in [api_cache_dir, data_dir]:
+        # Try historical full data first, then fall back to recent 30
+        posts_file = cache_dir / 'posts_reactions_full.json'
+        if posts_file.exists():
+            with open(posts_file, 'r', encoding='utf-8') as f:
+                posts_data = json.load(f)
+            break
+        # Fallback to posts_with_reactions.json if full data not available
         posts_file = cache_dir / 'posts_with_reactions.json'
         if posts_file.exists():
             with open(posts_file, 'r', encoding='utf-8') as f:
@@ -571,7 +578,6 @@ def main():
 
     time_periods = {
         'All Time': (min_date, max_date),
-        'Today': (today, today),
         'Yesterday': (today - timedelta(days=1), today - timedelta(days=1)),
         'Last 7 Days': (today - timedelta(days=7), today),
         'Last 14 Days': (today - timedelta(days=14), today),
@@ -702,37 +708,48 @@ def main():
     st.sidebar.markdown(f"Total reactions: {total_all_reactions:,}")
 
     if total_all_reactions > 0:
-        # Get date range from API posts
-        reaction_post_count = len([p for p in api_posts if p.get('like', 0) > 0 or p.get('love', 0) > 0])
-        if api_posts:
-            dates = [p.get('created_time', '')[:10] for p in api_posts if p.get('created_time')]
-            if dates:
-                reaction_min_date = pd.to_datetime(min(dates)).strftime('%b %d, %Y')
-                reaction_max_date = pd.to_datetime(max(dates)).strftime('%b %d, %Y')
-                date_range_text = f"📅 Data from **{reaction_min_date}** to **{reaction_max_date}** ({reaction_post_count} posts)"
-            else:
-                date_range_text = f"📊 From {reaction_post_count} posts"
-        else:
-            date_range_text = ""
-
         st.markdown("### 😊 Reaction Breakdown")
-        if date_range_text:
-            st.markdown(date_range_text)
+
+        # Create DataFrame from API posts for filtering
+        reaction_posts_df = pd.DataFrame(api_posts)
+        if 'created_time' in reaction_posts_df.columns:
+            reaction_posts_df['date'] = pd.to_datetime(reaction_posts_df['created_time']).dt.date
+        elif 'date' in reaction_posts_df.columns:
+            reaction_posts_df['date'] = pd.to_datetime(reaction_posts_df['date']).dt.date
+
+        # Apply only time period filter (not post type) for reaction breakdown
+        filtered_reaction_df = reaction_posts_df[
+            (reaction_posts_df['date'] >= start_date) &
+            (reaction_posts_df['date'] <= end_date)
+        ]
+
+        # Calculate filtered totals
+        filtered_like = filtered_reaction_df['like'].sum() if 'like' in filtered_reaction_df.columns else 0
+        filtered_love = filtered_reaction_df['love'].sum() if 'love' in filtered_reaction_df.columns else 0
+        filtered_haha = filtered_reaction_df['haha'].sum() if 'haha' in filtered_reaction_df.columns else 0
+        filtered_wow = filtered_reaction_df['wow'].sum() if 'wow' in filtered_reaction_df.columns else 0
+        filtered_sad = filtered_reaction_df['sad'].sum() if 'sad' in filtered_reaction_df.columns else 0
+        filtered_angry = filtered_reaction_df['angry'].sum() if 'angry' in filtered_reaction_df.columns else 0
+        filtered_total = filtered_like + filtered_love + filtered_haha + filtered_wow + filtered_sad + filtered_angry
+
+        # Show filter info (time period only, all post types)
+        filter_info = f"📊 **{len(filtered_reaction_df):,}** posts (All Types) from **{start_date}** to **{end_date}**"
+        st.markdown(filter_info)
 
         col1, col2 = st.columns(2)
 
         with col1:
-            # Reaction counts
+            # Reaction counts pie chart
             reaction_df = pd.DataFrame({
                 'Reaction': ['👍 Like', '❤️ Love', '😆 Haha', '😮 Wow', '😢 Sad', '😠 Angry'],
-                'Count': [total_like, total_love, total_haha, total_wow, total_sad, total_angry]
+                'Count': [filtered_like, filtered_love, filtered_haha, filtered_wow, filtered_sad, filtered_angry]
             })
 
             fig = px.pie(
                 reaction_df,
                 values='Count',
                 names='Reaction',
-                title=f'Reaction Distribution (Total: {format_number(total_all_reactions)})',
+                title=f'Reaction Distribution (Total: {format_number(filtered_total)})',
                 color_discrete_sequence=['#4267B2', '#F02849', '#F7B928', '#F7B928', '#F7B928', '#E9573F'],
                 hole=0.4
             )
@@ -740,17 +757,50 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
-            # Reaction bar chart
-            fig = px.bar(
-                reaction_df,
-                x='Reaction',
-                y='Count',
-                title='Reactions by Type',
-                color='Reaction',
-                color_discrete_sequence=['#4267B2', '#F02849', '#F7B928', '#F7B928', '#F7B928', '#E9573F']
-            )
-            fig.update_layout(height=400, showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            # Daily Reaction Trend chart
+            if len(filtered_reaction_df) > 0:
+                daily_reactions = filtered_reaction_df.groupby('date').agg({
+                    'like': 'sum',
+                    'love': 'sum',
+                    'haha': 'sum',
+                    'wow': 'sum',
+                    'sad': 'sum',
+                    'angry': 'sum'
+                }).reset_index()
+                daily_reactions['date'] = pd.to_datetime(daily_reactions['date'])
+                daily_reactions = daily_reactions.sort_values('date')
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['like'],
+                    name='👍 Like', mode='lines', line=dict(width=2, color='#4267B2'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['love'],
+                    name='❤️ Love', mode='lines', line=dict(width=2, color='#F02849'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['haha'],
+                    name='😆 Haha', mode='lines', line=dict(width=1.5, color='#F7B928'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['wow'],
+                    name='😮 Wow', mode='lines', line=dict(width=1.5, color='#8B5CF6'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['sad'],
+                    name='😢 Sad', mode='lines', line=dict(width=1.5, color='#6B7280'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+                fig.add_trace(go.Scatter(x=daily_reactions['date'], y=daily_reactions['angry'],
+                    name='😠 Angry', mode='lines', line=dict(width=1.5, color='#E9573F'),
+                    hovertemplate='%{y:,}<extra></extra>'))
+
+                fig.update_layout(
+                    title='Daily Reaction Trend',
+                    xaxis_title='Date',
+                    yaxis_title='Reactions',
+                    height=400,
+                    hovermode='x unified',
+                    legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No reaction data for selected period")
         st.markdown("---")
 
     # Note: Reaction breakdown is only available when API data is loaded
@@ -850,52 +900,74 @@ def main():
     # ===== DAILY CONTENT PERFORMANCE (4 Charts with Engagement Breakdown) =====
     st.markdown("### 📊 Daily Content Performance")
 
-    # Prepare daily data with engagement breakdown
+    # Prepare daily data with engagement breakdown and post count
     daily_all = filtered_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
-        'shares': 'sum'
+        'shares': 'sum',
+        'post_id': 'count'  # Count posts per day
     }).reset_index()
+    daily_all.rename(columns={'post_id': 'post_count'}, inplace=True)
 
     # Filter by content type - Posts (Photos + Text)
     posts_df = filtered_df[filtered_df['post_type_clean'].isin(['Photos', 'Text'])]
     daily_posts = posts_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
-        'shares': 'sum'
-    }).reset_index() if not posts_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': []})
+        'shares': 'sum',
+        'post_id': 'count'
+    }).reset_index() if not posts_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_posts.empty:
+        daily_posts.rename(columns={'post_id': 'post_count'}, inplace=True)
 
     # Videos
     videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
     daily_videos = videos_df.groupby('date').agg({
         'reactions': 'sum',
         'comments': 'sum',
-        'shares': 'sum'
-    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': []})
+        'shares': 'sum',
+        'post_id': 'count'
+    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': [], 'post_count': []})
+    if not daily_videos.empty:
+        daily_videos.rename(columns={'post_id': 'post_count'}, inplace=True)
 
     # Create 4 charts in 2x2 grid
     col1, col2 = st.columns(2)
 
     with col1:
-        # Chart 1: Content Overview (All) - Reactions, Comments, Shares
+        # Chart 1: Content Overview (All) - Reactions, Comments, Shares with post count
+        total_all_posts = len(filtered_df)
         fig1 = go.Figure()
         fig1.add_trace(go.Scatter(
             x=daily_all['date'], y=daily_all['reactions'],
             name='Reactions', mode='lines',
-            line=dict(width=2, color='#F02849')
+            line=dict(width=2, color='#F02849'),
+            customdata=daily_all['post_count'],
+            hovertemplate='%{y:,}<extra></extra>'
         ))
         fig1.add_trace(go.Scatter(
             x=daily_all['date'], y=daily_all['comments'],
             name='Comments', mode='lines',
-            line=dict(width=2, color='#4361EE')
+            line=dict(width=2, color='#4361EE'),
+            hovertemplate='%{y:,}<extra></extra>'
         ))
         fig1.add_trace(go.Scatter(
             x=daily_all['date'], y=daily_all['shares'],
             name='Shares', mode='lines',
-            line=dict(width=2, color='#10B981')
+            line=dict(width=2, color='#10B981'),
+            hovertemplate='%{y:,}<extra></extra>'
+        ))
+        # Add invisible trace for post count in tooltip
+        fig1.add_trace(go.Scatter(
+            x=daily_all['date'], y=[0] * len(daily_all),
+            name='Posts', mode='lines',
+            line=dict(width=0, color='rgba(0,0,0,0)'),
+            customdata=daily_all['post_count'],
+            hovertemplate='📊 Posts: %{customdata}<extra></extra>',
+            showlegend=False
         ))
         fig1.update_layout(
-            title='📈 Content Overview (All)',
+            title=f'📈 Content Overview ({total_all_posts:,} posts)',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
@@ -905,26 +977,39 @@ def main():
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        # Chart 2: Posts Content (Photos + Text)
+        # Chart 2: Posts Content (Photos + Text) with post count
+        total_posts_count = len(posts_df)
         fig2 = go.Figure()
         if not daily_posts.empty and len(daily_posts) > 0:
             fig2.add_trace(go.Scatter(
                 x=daily_posts['date'], y=daily_posts['reactions'],
                 name='Reactions', mode='lines',
-                line=dict(width=2, color='#F02849')
+                line=dict(width=2, color='#F02849'),
+                hovertemplate='%{y:,}<extra></extra>'
             ))
             fig2.add_trace(go.Scatter(
                 x=daily_posts['date'], y=daily_posts['comments'],
                 name='Comments', mode='lines',
-                line=dict(width=2, color='#4361EE')
+                line=dict(width=2, color='#4361EE'),
+                hovertemplate='%{y:,}<extra></extra>'
             ))
             fig2.add_trace(go.Scatter(
                 x=daily_posts['date'], y=daily_posts['shares'],
                 name='Shares', mode='lines',
-                line=dict(width=2, color='#10B981')
+                line=dict(width=2, color='#10B981'),
+                hovertemplate='%{y:,}<extra></extra>'
+            ))
+            # Add invisible trace for post count in tooltip
+            fig2.add_trace(go.Scatter(
+                x=daily_posts['date'], y=[0] * len(daily_posts),
+                name='Posts', mode='lines',
+                line=dict(width=0, color='rgba(0,0,0,0)'),
+                customdata=daily_posts['post_count'],
+                hovertemplate='📝 Posts: %{customdata}<extra></extra>',
+                showlegend=False
             ))
         fig2.update_layout(
-            title='📝 Posts Content',
+            title=f'📝 Posts Content ({total_posts_count:,} posts)',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
@@ -963,12 +1048,25 @@ def main():
                 fig3.add_trace(go.Bar(
                     x=daily_stories['date'], y=daily_stories['photos'],
                     name='Photo Stories',
-                    marker_color='#F02849'
+                    marker_color='#F02849',
+                    customdata=daily_stories['count'],
+                    hovertemplate='%{y}<extra></extra>'
                 ))
                 fig3.add_trace(go.Bar(
                     x=daily_stories['date'], y=daily_stories['videos'],
                     name='Video Stories',
-                    marker_color='#4361EE'
+                    marker_color='#4361EE',
+                    customdata=daily_stories['count'],
+                    hovertemplate='%{y}<extra></extra>'
+                ))
+                # Add invisible trace for total daily story count in tooltip
+                fig3.add_trace(go.Scatter(
+                    x=daily_stories['date'], y=[0] * len(daily_stories),
+                    name='Total', mode='lines',
+                    line=dict(width=0, color='rgba(0,0,0,0)'),
+                    customdata=daily_stories['count'],
+                    hovertemplate='📱 Total: %{customdata}<extra></extra>',
+                    showlegend=False
                 ))
                 fig3.update_layout(barmode='stack')
             else:
@@ -996,26 +1094,39 @@ def main():
         st.plotly_chart(fig3, use_container_width=True)
 
     with col4:
-        # Chart 4: Reels Content (using Videos data as Reels are videos)
+        # Chart 4: Reels Content (using Videos data as Reels are videos) with video count
+        total_videos_count = len(videos_df)
         fig4 = go.Figure()
         if not daily_videos.empty and len(daily_videos) > 0:
             fig4.add_trace(go.Scatter(
                 x=daily_videos['date'], y=daily_videos['reactions'],
                 name='Reactions', mode='lines',
-                line=dict(width=2, color='#F02849')
+                line=dict(width=2, color='#F02849'),
+                hovertemplate='%{y:,}<extra></extra>'
             ))
             fig4.add_trace(go.Scatter(
                 x=daily_videos['date'], y=daily_videos['comments'],
                 name='Comments', mode='lines',
-                line=dict(width=2, color='#4361EE')
+                line=dict(width=2, color='#4361EE'),
+                hovertemplate='%{y:,}<extra></extra>'
             ))
             fig4.add_trace(go.Scatter(
                 x=daily_videos['date'], y=daily_videos['shares'],
                 name='Shares', mode='lines',
-                line=dict(width=2, color='#10B981')
+                line=dict(width=2, color='#10B981'),
+                hovertemplate='%{y:,}<extra></extra>'
+            ))
+            # Add invisible trace for video count in tooltip
+            fig4.add_trace(go.Scatter(
+                x=daily_videos['date'], y=[0] * len(daily_videos),
+                name='Videos', mode='lines',
+                line=dict(width=0, color='rgba(0,0,0,0)'),
+                customdata=daily_videos['post_count'],
+                hovertemplate='🎬 Videos: %{customdata}<extra></extra>',
+                showlegend=False
             ))
         fig4.update_layout(
-            title='🎬 Reels Content',
+            title=f'🎬 Reels Content ({total_videos_count:,} videos)',
             xaxis_title='Date',
             yaxis_title='Count',
             height=350,
