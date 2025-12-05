@@ -119,7 +119,8 @@ def get_highlight_color():
 
 
 # ===== API FETCH FUNCTIONS (for Streamlit Cloud) =====
-@st.cache_data(ttl=300)
+# Cache TTL: 3600 seconds = 1 hour
+@st.cache_data(ttl=3600)
 def fetch_page_info_api():
     """Fetch page-level metrics from Facebook API"""
     page_id, page_token, base_url = get_credentials()
@@ -142,7 +143,7 @@ def fetch_page_info_api():
     return {}
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def fetch_posts_api(limit=50):
     """Fetch recent posts with engagement and reaction breakdown from Facebook API"""
     page_id, page_token, base_url = get_credentials()
@@ -216,7 +217,7 @@ def fetch_posts_api(limit=50):
     }
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def fetch_videos_api(limit=100):
     """Fetch videos with view counts from Facebook API"""
     page_id, page_token, base_url = get_credentials()
@@ -249,7 +250,7 @@ def fetch_videos_api(limit=100):
     }
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=3600)
 def load_api_data():
     """Load data from API JSON files or fetch from API directly"""
     data_dir = Path(__file__).parent / 'data'
@@ -295,7 +296,7 @@ def load_api_data():
     return page_info, posts_data, videos_data
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=3600)
 def load_csv_data():
     """Load data from CSV exports (fallback)"""
     exports_dir = Path(__file__).parent / 'exports'
