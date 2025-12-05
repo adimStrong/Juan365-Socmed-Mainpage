@@ -14,20 +14,24 @@ import json
 import requests
 
 # Try to load config - supports both local config.py and Streamlit secrets
-PAGE_ID = None
-PAGE_TOKEN = None
-BASE_URL = "https://graph.facebook.com/v21.0"
-
-try:
-    from config import PAGE_ID, PAGE_TOKEN, BASE_URL
-except ImportError:
-    # Running on Streamlit Cloud - use secrets
+def get_credentials():
+    """Get API credentials from config.py or Streamlit secrets"""
     try:
-        PAGE_ID = st.secrets.get("PAGE_ID")
-        PAGE_TOKEN = st.secrets.get("PAGE_TOKEN")
-        BASE_URL = st.secrets.get("BASE_URL", "https://graph.facebook.com/v21.0")
-    except Exception:
-        pass  # Will use cached data only
+        from config import PAGE_ID, PAGE_TOKEN, BASE_URL
+        return PAGE_ID, PAGE_TOKEN, BASE_URL
+    except ImportError:
+        # Running on Streamlit Cloud - use secrets
+        try:
+            page_id = st.secrets["PAGE_ID"]
+            page_token = st.secrets["PAGE_TOKEN"]
+            base_url = st.secrets.get("BASE_URL", "https://graph.facebook.com/v21.0")
+            return page_id, page_token, base_url
+        except Exception as e:
+            st.warning(f"No credentials found. Please add secrets in Streamlit Cloud settings.")
+            return None, None, "https://graph.facebook.com/v21.0"
+
+# These will be set when needed
+PAGE_ID, PAGE_TOKEN, BASE_URL = None, None, "https://graph.facebook.com/v21.0"
 
 # Page config
 st.set_page_config(
@@ -118,13 +122,14 @@ def get_highlight_color():
 @st.cache_data(ttl=300)
 def fetch_page_info_api():
     """Fetch page-level metrics from Facebook API"""
-    if not PAGE_ID or not PAGE_TOKEN:
+    page_id, page_token, base_url = get_credentials()
+    if not page_id or not page_token:
         return {}
 
-    url = f"{BASE_URL}/{PAGE_ID}"
+    url = f"{base_url}/{page_id}"
     params = {
         'fields': 'name,fan_count,followers_count,talking_about_count,overall_star_rating,rating_count',
-        'access_token': PAGE_TOKEN
+        'access_token': page_token
     }
     try:
         response = requests.get(url, params=params, timeout=10)
@@ -140,11 +145,12 @@ def fetch_page_info_api():
 @st.cache_data(ttl=300)
 def fetch_posts_api(limit=100):
     """Fetch recent posts with engagement from Facebook API"""
-    if not PAGE_ID or not PAGE_TOKEN:
+    page_id, page_token, base_url = get_credentials()
+    if not page_id or not page_token:
         return {'posts': [], 'total_posts': 0}
 
     posts = []
-    url = f"{BASE_URL}/{PAGE_ID}/posts"
+    url = f"{base_url}/{page_id}/posts"
     params = {
         'fields': 'id,message,created_time,shares,permalink_url,status_type,'
                   'reactions.type(LIKE).summary(true).as(like),'
@@ -155,7 +161,7 @@ def fetch_posts_api(limit=100):
                   'reactions.type(ANGRY).summary(true).as(angry),'
                   'reactions.summary(true),comments.summary(true)',
         'limit': limit,
-        'access_token': PAGE_TOKEN
+        'access_token': page_token
     }
 
     try:
@@ -195,15 +201,16 @@ def fetch_posts_api(limit=100):
 @st.cache_data(ttl=300)
 def fetch_videos_api(limit=100):
     """Fetch videos with view counts from Facebook API"""
-    if not PAGE_ID or not PAGE_TOKEN:
+    page_id, page_token, base_url = get_credentials()
+    if not page_id or not page_token:
         return {'videos': [], 'total_videos': 0, 'total_views': 0}
 
     videos = []
-    url = f"{BASE_URL}/{PAGE_ID}/videos"
+    url = f"{base_url}/{page_id}/videos"
     params = {
         'fields': 'id,title,description,created_time,length,views,permalink_url',
         'limit': limit,
-        'access_token': PAGE_TOKEN
+        'access_token': page_token
     }
 
     try:
@@ -251,13 +258,15 @@ def load_api_data():
             videos_data = json.load(f)
 
     # If no local files, try fetching from API (Streamlit Cloud mode)
-    if not page_info and PAGE_ID and PAGE_TOKEN:
+    page_id, page_token, _ = get_credentials()
+
+    if not page_info and page_id and page_token:
         page_info = fetch_page_info_api()
 
-    if not posts_data.get('posts') and PAGE_ID and PAGE_TOKEN:
+    if not posts_data.get('posts') and page_id and page_token:
         posts_data = fetch_posts_api(limit=100)
 
-    if not videos_data.get('videos') and PAGE_ID and PAGE_TOKEN:
+    if not videos_data.get('videos') and page_id and page_token:
         videos_data = fetch_videos_api(limit=100)
 
     return page_info, posts_data, videos_data
