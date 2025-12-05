@@ -143,8 +143,8 @@ def fetch_page_info_api():
 
 
 @st.cache_data(ttl=300)
-def fetch_posts_api(limit=100):
-    """Fetch recent posts with engagement from Facebook API"""
+def fetch_posts_api(limit=50):
+    """Fetch recent posts with engagement and reaction breakdown from Facebook API"""
     page_id, page_token, base_url = get_credentials()
     if not page_id or not page_token:
         return {'posts': [], 'total_posts': 0}
@@ -165,7 +165,6 @@ def fetch_posts_api(limit=100):
         data = response.json()
 
         if 'error' not in data:
-            post_ids = []
             for post in data.get('data', []):
                 processed = {
                     'id': post.get('id'),
@@ -180,46 +179,32 @@ def fetch_posts_api(limit=100):
                 }
                 processed['engagement'] = processed['reactions'] + processed['comments'] + processed['shares']
                 posts.append(processed)
-                post_ids.append(post.get('id'))
 
-            # Now fetch reaction breakdown separately (simpler query)
-            if post_ids:
-                reaction_url = f"{base_url}/{page_id}/posts"
-                reaction_params = {
-                    'fields': 'id,'
-                              'reactions.type(LIKE).limit(0).summary(true).as(like),'
-                              'reactions.type(LOVE).limit(0).summary(true).as(love),'
-                              'reactions.type(HAHA).limit(0).summary(true).as(haha),'
-                              'reactions.type(WOW).limit(0).summary(true).as(wow),'
-                              'reactions.type(SAD).limit(0).summary(true).as(sad),'
-                              'reactions.type(ANGRY).limit(0).summary(true).as(angry)',
-                    'limit': limit,
-                    'access_token': page_token
-                }
-
+            # Fetch reaction breakdown per post (for first 50 posts)
+            for post in posts[:50]:
                 try:
-                    reaction_response = requests.get(reaction_url, params=reaction_params, timeout=30)
+                    reaction_url = f"{base_url}/{post['id']}"
+                    reaction_params = {
+                        'fields': 'reactions.type(LIKE).summary(true).as(like),'
+                                  'reactions.type(LOVE).summary(true).as(love),'
+                                  'reactions.type(HAHA).summary(true).as(haha),'
+                                  'reactions.type(WOW).summary(true).as(wow),'
+                                  'reactions.type(SAD).summary(true).as(sad),'
+                                  'reactions.type(ANGRY).summary(true).as(angry)',
+                        'access_token': page_token
+                    }
+                    reaction_response = requests.get(reaction_url, params=reaction_params, timeout=10)
                     reaction_data = reaction_response.json()
 
                     if 'error' not in reaction_data:
-                        # Create lookup by post ID
-                        reaction_lookup = {}
-                        for rpost in reaction_data.get('data', []):
-                            reaction_lookup[rpost.get('id')] = {
-                                'like': rpost.get('like', {}).get('summary', {}).get('total_count', 0),
-                                'love': rpost.get('love', {}).get('summary', {}).get('total_count', 0),
-                                'haha': rpost.get('haha', {}).get('summary', {}).get('total_count', 0),
-                                'wow': rpost.get('wow', {}).get('summary', {}).get('total_count', 0),
-                                'sad': rpost.get('sad', {}).get('summary', {}).get('total_count', 0),
-                                'angry': rpost.get('angry', {}).get('summary', {}).get('total_count', 0),
-                            }
-
-                        # Merge reaction data into posts
-                        for post in posts:
-                            if post['id'] in reaction_lookup:
-                                post.update(reaction_lookup[post['id']])
+                        post['like'] = reaction_data.get('like', {}).get('summary', {}).get('total_count', 0)
+                        post['love'] = reaction_data.get('love', {}).get('summary', {}).get('total_count', 0)
+                        post['haha'] = reaction_data.get('haha', {}).get('summary', {}).get('total_count', 0)
+                        post['wow'] = reaction_data.get('wow', {}).get('summary', {}).get('total_count', 0)
+                        post['sad'] = reaction_data.get('sad', {}).get('summary', {}).get('total_count', 0)
+                        post['angry'] = reaction_data.get('angry', {}).get('summary', {}).get('total_count', 0)
                 except Exception:
-                    pass  # Reaction breakdown failed, continue with basic data
+                    pass  # Skip this post's reaction breakdown
 
     except Exception:
         pass
