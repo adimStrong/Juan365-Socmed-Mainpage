@@ -254,6 +254,12 @@ def load_api_data():
     1. api_cache/ folder (committed to git, works on Streamlit Cloud)
     2. data/ folder (local only, in .gitignore)
     3. Fetch from API directly
+
+    Returns:
+    - page_info: Page-level metrics
+    - posts_data: Recent 30 posts with reaction breakdown
+    - videos_data: Videos with views
+    - all_posts_data: All posts from June 2025 (for historical charts)
     """
     base_dir = Path(__file__).parent
     api_cache_dir = base_dir / 'api_cache'  # Committed to git
@@ -268,7 +274,7 @@ def load_api_data():
                 page_info = json.load(f)
             break
 
-    # Load posts - try api_cache first, then data folder
+    # Load posts with reactions (recent 30 for reaction breakdown)
     posts_data = {'posts': [], 'total_posts': 0}
     for cache_dir in [api_cache_dir, data_dir]:
         posts_file = cache_dir / 'posts_with_reactions.json'
@@ -276,11 +282,14 @@ def load_api_data():
             with open(posts_file, 'r', encoding='utf-8') as f:
                 posts_data = json.load(f)
             break
-        # Also check old filename
-        posts_file = cache_dir / 'posts.json'
-        if posts_file.exists():
-            with open(posts_file, 'r', encoding='utf-8') as f:
-                posts_data = json.load(f)
+
+    # Load ALL posts (from June 2025 - for historical charts)
+    all_posts_data = {'posts': [], 'total_posts': 0}
+    for cache_dir in [api_cache_dir, data_dir]:
+        all_posts_file = cache_dir / 'posts.json'
+        if all_posts_file.exists():
+            with open(all_posts_file, 'r', encoding='utf-8') as f:
+                all_posts_data = json.load(f)
             break
 
     # Load videos - try api_cache first, then data folder
@@ -290,6 +299,15 @@ def load_api_data():
         if videos_file.exists():
             with open(videos_file, 'r', encoding='utf-8') as f:
                 videos_data = json.load(f)
+            break
+
+    # Load stories data
+    stories_data = {'stories': [], 'total_stories': 0}
+    for cache_dir in [api_cache_dir, data_dir]:
+        stories_file = cache_dir / 'stories.json'
+        if stories_file.exists():
+            with open(stories_file, 'r', encoding='utf-8') as f:
+                stories_data = json.load(f)
             break
 
     # Only fetch from API if no cached data found
@@ -310,7 +328,7 @@ def load_api_data():
         if not videos_data.get('videos'):
             videos_data = fetch_videos_api(limit=100)
 
-    return page_info, posts_data, videos_data
+    return page_info, posts_data, videos_data, all_posts_data, stories_data
 
 
 @st.cache_data(ttl=3600)
@@ -405,8 +423,29 @@ def prepare_posts_dataframe(posts_data):
 
     df['time_slot'] = df['hour'].apply(get_time_slot)
 
-    # Clean post types
-    df['post_type_clean'] = df['post_type'].fillna('Unknown')
+    # Clean post types - API uses 'status_type', map to readable names
+    type_mapping = {
+        'added_photos': 'Photos',
+        'added_video': 'Videos',
+        'mobile_status_update': 'Text',
+        'shared_story': 'Shared',
+        'created_event': 'Event',
+        'unknown': 'Other'
+    }
+    if 'status_type' in df.columns:
+        df['post_type_clean'] = df['status_type'].map(type_mapping).fillna('Other')
+    elif 'post_type' in df.columns:
+        df['post_type_clean'] = df['post_type'].fillna('Unknown')
+    else:
+        df['post_type_clean'] = 'Unknown'
+
+    # Add post_id column if not present (for compatibility)
+    if 'post_id' not in df.columns and 'id' in df.columns:
+        df['post_id'] = df['id']
+
+    # Add permalink column if not present (API uses permalink_url)
+    if 'permalink' not in df.columns and 'permalink_url' in df.columns:
+        df['permalink'] = df['permalink_url']
 
     return df
 
@@ -418,14 +457,18 @@ def format_number(num):
 
 def main():
     # Load API data (for page-level info: followers, rating, video views, reaction breakdown)
-    page_info, posts_data, videos_data = load_api_data()
+    page_info, posts_data, videos_data, all_posts_data, stories_data = load_api_data()
 
     # PRIMARY: Load CSV data (has Reach, Views, complete engagement data)
     df = load_csv_data()
 
-    # If no CSV, fall back to API data
+    # If no CSV, fall back to API data (use all_posts_data for full history)
     if df is None or df.empty:
-        df = prepare_posts_dataframe(posts_data)
+        # Prefer all_posts_data (802 posts from June) over posts_data (30 posts with reactions)
+        if all_posts_data.get('posts'):
+            df = prepare_posts_dataframe(all_posts_data)
+        else:
+            df = prepare_posts_dataframe(posts_data)
     else:
         # Merge reaction breakdown from API into CSV data
         api_posts = posts_data.get('posts', [])
@@ -512,11 +555,12 @@ def main():
 
     # Check if we have data
     if df is None or df.empty:
-        st.warning("No data available. Please add CSV exports to the 'exports' folder or run api_fetcher.py.")
+        st.warning("No data available. Please run fetch_all_api_data.py to fetch data from Facebook API.")
         return
 
     # Show data source info
-    st.sidebar.success(f"📊 Loaded {len(df):,} posts from CSV")
+    data_source = "API Cache" if all_posts_data.get('posts') else "CSV"
+    st.sidebar.success(f"📊 Loaded {len(df):,} posts from {data_source}")
 
     # Sidebar filters
     st.sidebar.markdown("## 🎛️ Filters")
@@ -564,10 +608,15 @@ def main():
     st.sidebar.markdown(f"**Period:** {start_date} to {end_date}")
 
     # Data last updated
-    fetched_at = posts_data.get('fetched_at', 'Unknown')
+    fetched_at = all_posts_data.get('fetched_at') or posts_data.get('fetched_at', 'Unknown')
     if fetched_at != 'Unknown':
         fetched_dt = datetime.fromisoformat(fetched_at)
         st.sidebar.markdown(f"**Updated:** {fetched_dt.strftime('%Y-%m-%d %H:%M')}")
+
+    # Show date range if available
+    date_range = all_posts_data.get('date_range', {})
+    if date_range:
+        st.sidebar.markdown(f"**Data Range:** {date_range.get('start', 'N/A')} to {date_range.get('end', 'N/A')}")
 
     # ===== MAIN KPIs =====
     st.markdown("### 📈 Performance Metrics")
@@ -706,21 +755,274 @@ def main():
 
     # Note: Reaction breakdown is only available when API data is loaded
 
-    # Content Distribution Chart
-    st.markdown("### 🎯 Content Distribution")
-    type_counts = filtered_df['post_type_clean'].value_counts().reset_index()
-    type_counts.columns = ['Post Type', 'Count']
+    # Content Distribution and Growth Rate Charts
+    st.markdown("### 🎯 Content Distribution & Growth")
 
-    fig = px.pie(
-        type_counts,
-        values='Count',
-        names='Post Type',
-        title='Posts by Type',
-        color_discrete_sequence=px.colors.qualitative.Set2,
-        hole=0.4
-    )
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Content Distribution Pie Chart
+        type_counts = filtered_df['post_type_clean'].value_counts().reset_index()
+        type_counts.columns = ['Post Type', 'Count']
+
+        fig = px.pie(
+            type_counts,
+            values='Count',
+            names='Post Type',
+            title='Posts by Type',
+            color_discrete_sequence=px.colors.qualitative.Set2,
+            hole=0.4
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        # Growth Rate by Engagement (Weekly with ISO week numbers)
+        filtered_df_copy = filtered_df.copy()
+        filtered_df_copy['date_dt'] = pd.to_datetime(filtered_df_copy['date'])
+        filtered_df_copy['iso_year'] = filtered_df_copy['date_dt'].dt.isocalendar().year
+        filtered_df_copy['iso_week'] = filtered_df_copy['date_dt'].dt.isocalendar().week
+        filtered_df_copy['week_key'] = filtered_df_copy['iso_year'].astype(str) + '-W' + filtered_df_copy['iso_week'].astype(str).str.zfill(2)
+
+        weekly_engagement = filtered_df_copy.groupby('week_key').agg({
+            'engagement': 'sum',
+            'reactions': 'sum',
+            'comments': 'sum',
+            'shares': 'sum',
+            'date_dt': ['min', 'max']
+        }).reset_index()
+        weekly_engagement.columns = ['week_key', 'engagement', 'reactions', 'comments', 'shares', 'week_start', 'week_end']
+
+        # Sort by week_key to ensure proper order
+        weekly_engagement = weekly_engagement.sort_values('week_key')
+
+        # Calculate week-over-week growth rate
+        if len(weekly_engagement) > 1:
+            weekly_engagement['growth_rate'] = weekly_engagement['engagement'].pct_change() * 100
+            weekly_engagement['growth_rate'] = weekly_engagement['growth_rate'].fillna(0)
+
+            # Create ISO week labels for x-axis (e.g., "W23", "W24")
+            weekly_engagement['iso_week_label'] = weekly_engagement['week_key'].str.split('-W').str[1].astype(int).apply(lambda x: f"W{x}")
+
+            # Create date range for tooltip
+            weekly_engagement['date_range'] = weekly_engagement.apply(
+                lambda row: f"{row['week_start'].strftime('%b %d')} - {row['week_end'].strftime('%b %d, %Y')}", axis=1
+            )
+
+            # Create bar chart with color based on positive/negative growth
+            colors = ['#10B981' if x >= 0 else '#EF4444' for x in weekly_engagement['growth_rate']]
+
+            # Pre-format growth rate for tooltip
+            weekly_engagement['growth_formatted'] = weekly_engagement['growth_rate'].apply(lambda x: f"{x:+.1f}%")
+
+            fig_growth = go.Figure()
+            fig_growth.add_trace(go.Bar(
+                x=weekly_engagement['iso_week_label'],
+                y=weekly_engagement['growth_rate'],
+                marker_color=colors,
+                name='Growth Rate',
+                text=[f"{x:+.1f}%" for x in weekly_engagement['growth_rate']],
+                textposition='outside',
+                customdata=weekly_engagement[['week_key', 'date_range', 'engagement', 'growth_formatted']].values,
+                hovertemplate='<b>%{customdata[0]}</b><br>' +
+                              '%{customdata[1]}<br>' +
+                              'Growth: %{customdata[3]}<br>' +
+                              'Engagement: %{customdata[2]:,}<extra></extra>'
+            ))
+
+            # Add a reference line at 0
+            fig_growth.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+
+            fig_growth.update_layout(
+                title='Weekly Engagement Growth Rate',
+                xaxis_title='ISO Week',
+                yaxis_title='Growth Rate (%)',
+                height=400,
+                showlegend=False,
+                hovermode='closest'
+            )
+            st.plotly_chart(fig_growth, use_container_width=True)
+        else:
+            st.info("Not enough data to calculate growth rate. Need at least 2 weeks of data.")
+
+    st.markdown("---")
+
+    # ===== DAILY CONTENT PERFORMANCE (4 Charts with Engagement Breakdown) =====
+    st.markdown("### 📊 Daily Content Performance")
+
+    # Prepare daily data with engagement breakdown
+    daily_all = filtered_df.groupby('date').agg({
+        'reactions': 'sum',
+        'comments': 'sum',
+        'shares': 'sum'
+    }).reset_index()
+
+    # Filter by content type - Posts (Photos + Text)
+    posts_df = filtered_df[filtered_df['post_type_clean'].isin(['Photos', 'Text'])]
+    daily_posts = posts_df.groupby('date').agg({
+        'reactions': 'sum',
+        'comments': 'sum',
+        'shares': 'sum'
+    }).reset_index() if not posts_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': []})
+
+    # Videos
+    videos_df = filtered_df[filtered_df['post_type_clean'] == 'Videos']
+    daily_videos = videos_df.groupby('date').agg({
+        'reactions': 'sum',
+        'comments': 'sum',
+        'shares': 'sum'
+    }).reset_index() if not videos_df.empty else pd.DataFrame({'date': [], 'reactions': [], 'comments': [], 'shares': []})
+
+    # Create 4 charts in 2x2 grid
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Chart 1: Content Overview (All) - Reactions, Comments, Shares
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(
+            x=daily_all['date'], y=daily_all['reactions'],
+            name='Reactions', mode='lines',
+            line=dict(width=2, color='#F02849')
+        ))
+        fig1.add_trace(go.Scatter(
+            x=daily_all['date'], y=daily_all['comments'],
+            name='Comments', mode='lines',
+            line=dict(width=2, color='#4361EE')
+        ))
+        fig1.add_trace(go.Scatter(
+            x=daily_all['date'], y=daily_all['shares'],
+            name='Shares', mode='lines',
+            line=dict(width=2, color='#10B981')
+        ))
+        fig1.update_layout(
+            title='📈 Content Overview (All)',
+            xaxis_title='Date',
+            yaxis_title='Count',
+            height=350,
+            hovermode='x unified',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        # Chart 2: Posts Content (Photos + Text)
+        fig2 = go.Figure()
+        if not daily_posts.empty and len(daily_posts) > 0:
+            fig2.add_trace(go.Scatter(
+                x=daily_posts['date'], y=daily_posts['reactions'],
+                name='Reactions', mode='lines',
+                line=dict(width=2, color='#F02849')
+            ))
+            fig2.add_trace(go.Scatter(
+                x=daily_posts['date'], y=daily_posts['comments'],
+                name='Comments', mode='lines',
+                line=dict(width=2, color='#4361EE')
+            ))
+            fig2.add_trace(go.Scatter(
+                x=daily_posts['date'], y=daily_posts['shares'],
+                name='Shares', mode='lines',
+                line=dict(width=2, color='#10B981')
+            ))
+        fig2.update_layout(
+            title='📝 Posts Content',
+            xaxis_title='Date',
+            yaxis_title='Count',
+            height=350,
+            hovermode='x unified',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+        # Chart 3: Stories Content - Show daily story count
+        stories = stories_data.get('stories', [])
+        fig3 = go.Figure()
+
+        if stories:
+            # Create DataFrame from stories
+            stories_df = pd.DataFrame(stories)
+            stories_df['date'] = pd.to_datetime(stories_df['date'], errors='coerce').dt.date
+
+            # Filter by selected date range
+            stories_df = stories_df[(stories_df['date'] >= start_date) & (stories_df['date'] <= end_date)]
+
+            if not stories_df.empty:
+                # Group by date and count stories
+                daily_stories = stories_df.groupby('date').size().reset_index(name='count')
+
+                # Separate by media type
+                photo_stories = stories_df[stories_df['media_type'] == 'photo'].groupby('date').size().reset_index(name='photos')
+                video_stories = stories_df[stories_df['media_type'] == 'video'].groupby('date').size().reset_index(name='videos')
+
+                # Merge counts
+                daily_stories = daily_stories.merge(photo_stories, on='date', how='left').fillna(0)
+                daily_stories = daily_stories.merge(video_stories, on='date', how='left').fillna(0)
+
+                fig3.add_trace(go.Bar(
+                    x=daily_stories['date'], y=daily_stories['photos'],
+                    name='Photo Stories',
+                    marker_color='#F02849'
+                ))
+                fig3.add_trace(go.Bar(
+                    x=daily_stories['date'], y=daily_stories['videos'],
+                    name='Video Stories',
+                    marker_color='#4361EE'
+                ))
+                fig3.update_layout(barmode='stack')
+            else:
+                fig3.add_annotation(
+                    text="No stories in selected date range",
+                    xref="paper", yref="paper", x=0.5, y=0.5,
+                    showarrow=False, font=dict(size=12, color='#6B7280')
+                )
+        else:
+            fig3.add_annotation(
+                text="No stories data available",
+                xref="paper", yref="paper", x=0.5, y=0.5,
+                showarrow=False, font=dict(size=12, color='#6B7280')
+            )
+
+        total_stories = stories_data.get('total_stories', 0)
+        fig3.update_layout(
+            title=f'📱 Stories Content ({total_stories:,} total)',
+            xaxis_title='Date',
+            yaxis_title='Story Count',
+            height=350,
+            hovermode='x unified',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with col4:
+        # Chart 4: Reels Content (using Videos data as Reels are videos)
+        fig4 = go.Figure()
+        if not daily_videos.empty and len(daily_videos) > 0:
+            fig4.add_trace(go.Scatter(
+                x=daily_videos['date'], y=daily_videos['reactions'],
+                name='Reactions', mode='lines',
+                line=dict(width=2, color='#F02849')
+            ))
+            fig4.add_trace(go.Scatter(
+                x=daily_videos['date'], y=daily_videos['comments'],
+                name='Comments', mode='lines',
+                line=dict(width=2, color='#4361EE')
+            ))
+            fig4.add_trace(go.Scatter(
+                x=daily_videos['date'], y=daily_videos['shares'],
+                name='Shares', mode='lines',
+                line=dict(width=2, color='#10B981')
+            ))
+        fig4.update_layout(
+            title='🎬 Reels Content',
+            xaxis_title='Date',
+            yaxis_title='Count',
+            height=350,
+            hovermode='x unified',
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+        )
+        st.plotly_chart(fig4, use_container_width=True)
 
     # Charts row 2
     col1, col2 = st.columns(2)
@@ -903,10 +1205,11 @@ def main():
         column_config={"Link": st.column_config.LinkColumn("Link", display_text="View →")}
     )
 
-    # Footer
+    # Footer - use yesterday's date since today might not have complete data
     st.markdown("---")
+    report_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     st.markdown(
-        f"<p class='footer-text'>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} • Data from Facebook Graph API</p>",
+        f"<p class='footer-text'>Report Date: {report_date} • Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} • Data from Facebook Graph API</p>",
         unsafe_allow_html=True
     )
 
