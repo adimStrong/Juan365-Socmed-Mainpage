@@ -285,21 +285,45 @@ def main():
     # Sidebar filters
     st.sidebar.markdown("## 🎛️ Filters")
 
-    # Date range filter
+    # Quick time period filter
+    today = datetime.now().date()
     min_date = df['date'].min()
     max_date = df['date'].max()
 
-    date_range = st.sidebar.date_input(
-        "Date Range",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date
-    )
+    time_periods = {
+        'All Time': (min_date, max_date),
+        'Today': (today, today),
+        'Yesterday': (today - timedelta(days=1), today - timedelta(days=1)),
+        'Last 3 Days': (today - timedelta(days=3), today),
+        'Last 7 Days': (today - timedelta(days=7), today),
+        'Last 14 Days': (today - timedelta(days=14), today),
+        'Last 30 Days': (today - timedelta(days=30), today),
+        'Last 60 Days': (today - timedelta(days=60), today),
+        'Last 90 Days': (today - timedelta(days=90), today),
+        'This Week': (today - timedelta(days=today.weekday()), today),
+        'Last Week': (today - timedelta(days=today.weekday() + 7), today - timedelta(days=today.weekday() + 1)),
+        'This Month': (today.replace(day=1), today),
+        'Custom': None
+    }
 
-    if len(date_range) == 2:
-        start_date, end_date = date_range
+    selected_period = st.sidebar.selectbox("📅 Time Period", list(time_periods.keys()))
+
+    if selected_period == 'Custom':
+        date_range = st.sidebar.date_input(
+            "Custom Date Range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        if len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date, end_date = min_date, max_date
     else:
-        start_date, end_date = min_date, max_date
+        start_date, end_date = time_periods[selected_period]
+        # Ensure dates are within data range
+        start_date = max(start_date, min_date)
+        end_date = min(end_date, max_date)
 
     # Post type filter
     post_types = ['All'] + sorted(df['post_type_clean'].unique().tolist())
