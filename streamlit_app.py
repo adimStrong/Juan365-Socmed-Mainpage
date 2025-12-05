@@ -765,6 +765,11 @@ def main():
         display_videos['Views'] = display_videos['Views'].apply(lambda x: f"{int(x):,}")
         display_videos['Created'] = pd.to_datetime(display_videos['Created']).dt.strftime('%Y-%m-%d')
 
+        # Fix relative URLs - add Facebook base URL
+        display_videos['Link'] = display_videos['Link'].apply(
+            lambda x: f"https://www.facebook.com{x}" if x and x.startswith('/') else x
+        )
+
         st.dataframe(
             display_videos,
             use_container_width=True,
