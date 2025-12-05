@@ -144,8 +144,10 @@ def fetch_page_info_api():
 
 
 @st.cache_data(ttl=3600)
-def fetch_posts_api(limit=100):
-    """Fetch recent posts with engagement and reaction breakdown from Facebook API"""
+def fetch_posts_api(limit=30):
+    """Fetch recent posts with engagement and reaction breakdown from Facebook API.
+    Note: limit=30 is the max for reaction breakdown due to API data limits.
+    """
     page_id, page_token, base_url = get_credentials()
     if not page_id or not page_token:
         return {'posts': [], 'total_posts': 0, 'error': 'No credentials'}
@@ -153,7 +155,7 @@ def fetch_posts_api(limit=100):
     posts = []
     error_msg = None
 
-    # First fetch basic post data
+    # Fetch posts with reaction breakdown (limit 30 due to API data size limits)
     url = f"{base_url}/{page_id}/posts"
     params = {
         'fields': 'id,message,created_time,shares,permalink_url,status_type,'
@@ -164,7 +166,7 @@ def fetch_posts_api(limit=100):
                   'reactions.type(WOW).summary(true).as(wow_count),'
                   'reactions.type(SAD).summary(true).as(sad_count),'
                   'reactions.type(ANGRY).summary(true).as(angry_count)',
-        'limit': limit,
+        'limit': min(limit, 30),  # Max 30 for reaction breakdown
         'access_token': page_token
     }
 
@@ -246,52 +248,65 @@ def fetch_videos_api(limit=100):
 
 @st.cache_data(ttl=3600)
 def load_api_data():
-    """Load data from API JSON files or fetch from API directly"""
-    data_dir = Path(__file__).parent / 'data'
+    """Load data from cached JSON files (committed to git) or fetch from API.
 
-    # Check if data directory exists (won't exist on Streamlit Cloud)
-    is_cloud = not data_dir.exists()
+    Priority:
+    1. api_cache/ folder (committed to git, works on Streamlit Cloud)
+    2. data/ folder (local only, in .gitignore)
+    3. Fetch from API directly
+    """
+    base_dir = Path(__file__).parent
+    api_cache_dir = base_dir / 'api_cache'  # Committed to git
+    data_dir = base_dir / 'data'  # Local only (.gitignore)
 
-    # Load page info from file (if local)
+    # Load page info - try api_cache first, then data folder
     page_info = {}
-    if not is_cloud:
-        page_info_file = data_dir / 'page_info.json'
+    for cache_dir in [api_cache_dir, data_dir]:
+        page_info_file = cache_dir / 'page_info.json'
         if page_info_file.exists():
             with open(page_info_file, 'r', encoding='utf-8') as f:
                 page_info = json.load(f)
+            break
 
-    # Load posts from file (if local)
+    # Load posts - try api_cache first, then data folder
     posts_data = {'posts': [], 'total_posts': 0}
-    if not is_cloud:
-        posts_file = data_dir / 'posts.json'
+    for cache_dir in [api_cache_dir, data_dir]:
+        posts_file = cache_dir / 'posts_with_reactions.json'
         if posts_file.exists():
             with open(posts_file, 'r', encoding='utf-8') as f:
                 posts_data = json.load(f)
+            break
+        # Also check old filename
+        posts_file = cache_dir / 'posts.json'
+        if posts_file.exists():
+            with open(posts_file, 'r', encoding='utf-8') as f:
+                posts_data = json.load(f)
+            break
 
-    # Load videos from file (if local)
+    # Load videos - try api_cache first, then data folder
     videos_data = {'videos': [], 'total_videos': 0, 'total_views': 0}
-    if not is_cloud:
-        videos_file = data_dir / 'videos.json'
+    for cache_dir in [api_cache_dir, data_dir]:
+        videos_file = cache_dir / 'videos.json'
         if videos_file.exists():
             with open(videos_file, 'r', encoding='utf-8') as f:
                 videos_data = json.load(f)
+            break
 
-    # Fetch from API - ALWAYS on cloud, or if no local data
+    # Only fetch from API if no cached data found
     page_id, page_token, _ = get_credentials()
 
     if page_id and page_token:
-        # Always fetch page info if empty
+        # Fetch page info if empty
         if not page_info:
             page_info = fetch_page_info_api()
 
-        # On cloud: ALWAYS fetch posts from API
-        # Local: fetch if no posts or no reaction data
-        if is_cloud or not posts_data.get('posts'):
-            posts_data = fetch_posts_api(limit=100)
+        # Fetch posts if no posts or no reaction data
+        if not posts_data.get('posts'):
+            posts_data = fetch_posts_api(limit=30)
         elif not any(p.get('like', 0) > 0 for p in posts_data.get('posts', [])):
-            posts_data = fetch_posts_api(limit=100)
+            posts_data = fetch_posts_api(limit=30)
 
-        # Always fetch videos if empty
+        # Fetch videos if empty
         if not videos_data.get('videos'):
             videos_data = fetch_videos_api(limit=100)
 
