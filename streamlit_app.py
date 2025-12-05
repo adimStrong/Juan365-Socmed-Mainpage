@@ -257,14 +257,19 @@ def load_api_data():
         with open(videos_file, 'r', encoding='utf-8') as f:
             videos_data = json.load(f)
 
-    # If no local files, try fetching from API (Streamlit Cloud mode)
+    # Fetch from API if no local files OR always fetch for reaction data
     page_id, page_token, _ = get_credentials()
 
     if not page_info and page_id and page_token:
         page_info = fetch_page_info_api()
 
-    if not posts_data.get('posts') and page_id and page_token:
-        posts_data = fetch_posts_api(limit=100)
+    # Always fetch posts from API for reaction breakdown (even if we have local files)
+    if page_id and page_token:
+        if not posts_data.get('posts'):
+            posts_data = fetch_posts_api(limit=100)
+        elif not any(p.get('like', 0) > 0 for p in posts_data.get('posts', [])):
+            # Local posts exist but no reaction data - fetch from API
+            posts_data = fetch_posts_api(limit=100)
 
     if not videos_data.get('videos') and page_id and page_token:
         videos_data = fetch_videos_api(limit=100)
